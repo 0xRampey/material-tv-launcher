@@ -42,11 +42,22 @@ public class HomeKeyService extends AccessibilityService {
         long now = SystemClock.elapsedRealtime();
         if (now - lastOpen < 700) return;
         lastOpen = now;
+        tryOpen(0);
+    }
+
+    private final android.os.Handler retry = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private void tryOpen(int attempt) {
         Intent home = new Intent(this, HomeActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         try {
             startActivity(home);
         } catch (RuntimeException e) {
+            if (attempt < 2) {
+                retry.postDelayed(() -> tryOpen(attempt + 1), attempt == 0 ? 600 : 1500);
+                return;
+            }
+            // Still failing: hand Home back to Google TV for a minute, then try again.
             cannotOpenUntil = SystemClock.elapsedRealtime() + 60_000;
             performGlobalAction(GLOBAL_ACTION_HOME);
         }
