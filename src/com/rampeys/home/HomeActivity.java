@@ -147,6 +147,7 @@ public class HomeActivity extends Activity {
     private TextView nowTitle;
     private TextView nowArtist;
     private WavyProgress nowProgress;
+    private final Map<String, EqualizerBadge> dockBadges = new HashMap<>();
     private ImageView nowButton;
     private GradientDrawable nowShape;
     private GradientDrawable nowButtonShape;
@@ -507,6 +508,7 @@ public class HomeActivity extends Activity {
         }
         dockKey = key;
         dock.removeAllViews();
+        dockBadges.clear();
         warmPalettes(present);
         int n = Math.max(1, present.size());
         float screenDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
@@ -522,6 +524,7 @@ public class HomeActivity extends Activity {
             arrive(tile, i++);
         }
         if (!showingApps && dock.getChildCount() > 0) dock.getChildAt(0).requestFocus();
+        updateBadges();
     }
 
     private void fillApps() {
@@ -654,6 +657,15 @@ public class HomeActivity extends Activity {
             if (focused) onTileFocused(pkg, label, art);
         });
 
+        if (inDock) {
+            EqualizerBadge badge = new EqualizerBadge(this);
+            badge.setVisibility(View.GONE);
+            FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(dp(30), dp(22), Gravity.TOP | Gravity.END);
+            bl.setMargins(0, dp(RING + 7), dp(RING + 7), 0);
+            ringFrame.addView(badge, bl);
+            badge.setElevation(dp(16));
+            dockBadges.put(pkg, badge);
+        }
         holder.addView(ringFrame, new LinearLayout.LayoutParams(w + dp(2 * RING), h + dp(2 * RING)));
         holder.addView(caption, new LinearLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT));
         return holder;
@@ -991,7 +1003,28 @@ public class HomeActivity extends Activity {
         showNowPlaying();
     }
 
+    /** Show the equalizer badge on the dock tile of the app that's playing (if it's in the dock). */
+    private void updateBadges() {
+        PlaybackState st = playing != null ? playing.getPlaybackState() : null;
+        String pkg = st != null && st.getState() == PlaybackState.STATE_PLAYING ? playing.getPackageName() : null;
+        for (Map.Entry<String, EqualizerBadge> e : dockBadges.entrySet()) {
+            boolean on = e.getKey().equals(pkg);
+            EqualizerBadge b = e.getValue();
+            if (on && b.getVisibility() != View.VISIBLE) {
+                b.setAlpha(0f);
+                b.setScaleX(0.6f);
+                b.setScaleY(0.6f);
+                b.setVisibility(View.VISIBLE);
+                b.animate().alpha(1f).scaleX(1f).scaleY(1f).setInterpolator(Motion.FAST_SPATIAL).setDuration(Motion.FAST_SPATIAL_MS).start();
+            } else if (!on && b.getVisibility() == View.VISIBLE) {
+                b.animate().alpha(0f).setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS)
+                        .withEndAction(() -> b.setVisibility(View.GONE)).start();
+            }
+        }
+    }
+
     private void showNowPlaying() {
+        if (nowCard != null) updateBadges();
         MediaMetadata m = playing != null ? playing.getMetadata() : null;
         PlaybackState st = playing != null ? playing.getPlaybackState() : null;
         boolean active = m != null && st != null
