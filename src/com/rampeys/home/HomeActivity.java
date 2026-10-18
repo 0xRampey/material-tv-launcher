@@ -146,6 +146,7 @@ public class HomeActivity extends Activity {
     private ImageView nowArt;
     private TextView nowTitle;
     private TextView nowArtist;
+    private WavyProgress nowProgress;
     private ImageView nowButton;
     private GradientDrawable nowShape;
     private GradientDrawable nowButtonShape;
@@ -909,6 +910,10 @@ public class HomeActivity extends Activity {
         nowArtist.setSingleLine(true);
         nowArtist.setEllipsize(TextUtils.TruncateAt.END);
         words.addView(nowArtist);
+        nowProgress = new WavyProgress(this);
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(12));
+        pl.topMargin = dp(6);
+        words.addView(nowProgress, pl);
         card.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         nowButton = new ImageView(this);
@@ -937,6 +942,7 @@ public class HomeActivity extends Activity {
         nowButton.setImageTintList(ColorStateList.valueOf(focused ? palette.inverseOnSurface : palette.onPrimary));
         nowTitle.setTextColor(palette.onSurface);
         nowArtist.setTextColor(palette.onSurfaceVariant);
+        nowProgress.setColors(palette.primary, withAlpha(palette.onSurfaceVariant, 0x55));
     }
 
     private void startNowPlaying() {
@@ -1004,6 +1010,10 @@ public class HomeActivity extends Activity {
         nowTitle.setText(title != null ? title : "");
         nowArtist.setText(artist != null ? artist : appLabel(playing.getPackageName()));
         nowArt.setImageBitmap(art);
+        long duration = m.getLong(MediaMetadata.METADATA_KEY_DURATION);
+        nowProgress.setVisibility(duration > 0 ? View.VISIBLE : View.GONE);
+        nowProgress.setState(st.getPosition(), st.getLastPositionUpdateTime(), st.getPlaybackSpeed(), duration,
+                st.getState() == PlaybackState.STATE_PLAYING);
         nowButton.setImageResource(st.getState() == PlaybackState.STATE_PLAYING ? R.drawable.ic_pause : R.drawable.ic_play);
         styleNowPlaying();
         // Cancel a pending fade-out first: its end action would otherwise hide the card again.
