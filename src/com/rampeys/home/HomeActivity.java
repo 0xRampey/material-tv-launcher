@@ -175,11 +175,63 @@ public class HomeActivity extends Activity {
     private String appsKey = "";
     private String dockKey = "";
     private ValueAnimator colorAnimator;
+    private final Map<Integer, Typeface> clockFonts = new HashMap<>();
+
+    /** Clock weight through the day: 250 at night, rising to 430 by mid-morning, easing back after sunset. */
+    private static int clockWeight() {
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        float h = cal.get(java.util.Calendar.HOUR_OF_DAY) + cal.get(java.util.Calendar.MINUTE) / 60f;
+        float[][] keys = {{0, 250}, {5, 250}, {9, 430}, {17, 430}, {21, 300}, {24, 250}};
+        for (int i = 0; i < keys.length - 1; i++) {
+            if (h >= keys[i][0] && h <= keys[i + 1][0]) {
+                float t = (h - keys[i][0]) / (keys[i + 1][0] - keys[i][0]);
+                return Math.round(keys[i][1] + (keys[i + 1][1] - keys[i][1]) * t);
+            }
+        }
+        return 300;
+    }
+
+    private Typeface clockFont(int weight) {
+        int w = Math.round(weight / 10f) * 10;
+        Typeface t = clockFonts.get(w);
+        if (t == null) {
+            try {
+                t = new Typeface.Builder(getAssets(), "fonts/GoogleSansFlex.ttf")
+                        .setFontVariationSettings("'wght' " + w + ", 'opsz' 48, 'ROND' 0").build();
+            } catch (RuntimeException e) {
+                t = font(300);
+            }
+            clockFonts.put(w, t);
+        }
+        return t;
+    }
+
+    /** A new minute: the old time lifts away, the new one settles in with a short weight swell. */
+    private void changeClock(String time) {
+        int base = clockWeight();
+        clock.animate().alpha(0f).translationY(-dp(6)).setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS)
+                .withEndAction(() -> {
+                    clock.setText(time);
+                    clock.setTranslationY(dp(8));
+                    clock.animate().alpha(1f).translationY(0).setInterpolator(Motion.DEFAULT_SPATIAL)
+                            .setDuration(Motion.DEFAULT_SPATIAL_MS).start();
+                    ValueAnimator swell = ValueAnimator.ofInt(base + 320, base).setDuration(700);
+                    swell.setInterpolator(Motion.DEFAULT_SPATIAL);
+                    swell.addUpdateListener(a -> clock.setTypeface(clockFont((int) a.getAnimatedValue())));
+                    swell.start();
+                }).start();
+    }
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             Date now = new Date();
-            clock.setText(new SimpleDateFormat("h:mm", Locale.getDefault()).format(now));
+            String time = new SimpleDateFormat("h:mm", Locale.getDefault()).format(now);
+            if (clock.getText().length() == 0) {
+                clock.setText(time);
+                clock.setTypeface(clockFont(clockWeight()));
+            } else if (!time.contentEquals(clock.getText())) {
+                changeClock(time);
+            }
             date.setText(new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now));
             handler.postDelayed(this, 15_000);
         }
