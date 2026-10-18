@@ -148,6 +148,12 @@ public class HomeActivity extends Activity {
     private TextView nowArtist;
     private WavyProgress nowProgress;
     private final Map<String, EqualizerBadge> dockBadges = new HashMap<>();
+    private final Map<String, View> deviceDots = new HashMap<>();   // input id -> "on" dot
+    private final android.media.tv.TvInputManager.TvInputCallback inputCallback = new android.media.tv.TvInputManager.TvInputCallback() {
+        @Override public void onInputStateChanged(String inputId, int state) {
+            showDeviceState(inputId, state);
+        }
+    };
     private ImageView nowButton;
     private GradientDrawable nowShape;
     private GradientDrawable nowButtonShape;
@@ -199,6 +205,11 @@ public class HomeActivity extends Activity {
         handler.removeCallbacks(prebuildApps);
         handler.postDelayed(prebuildApps, 1500);
         startNowPlaying();
+        android.media.tv.TvInputManager inputs = getSystemService(android.media.tv.TvInputManager.class);
+        if (inputs != null) {
+            inputs.registerCallback(inputCallback, handler);
+            for (String id : deviceDots.keySet()) showDeviceState(id, inputs.getInputState(id));
+        }
     }
 
     @Override protected void onPause() {
@@ -211,6 +222,8 @@ public class HomeActivity extends Activity {
         if (colorAnimator != null) colorAnimator.end();
         handler.removeCallbacks(settle);
         stopNowPlaying();
+        android.media.tv.TvInputManager inputs = getSystemService(android.media.tv.TvInputManager.class);
+        if (inputs != null) inputs.unregisterCallback(inputCallback);
         hideLoader();
     }
 
@@ -509,6 +522,7 @@ public class HomeActivity extends Activity {
         dockKey = key;
         dock.removeAllViews();
         dockBadges.clear();
+        deviceDots.clear();
         warmPalettes(present);
         int n = Math.max(1, present.size());
         float screenDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
@@ -657,6 +671,23 @@ public class HomeActivity extends Activity {
             if (focused) onTileFocused(pkg, label, art);
         });
 
+        if (inDock && device != null) {
+            View dot = new View(this);
+            GradientDrawable dotShape = new GradientDrawable();
+            dotShape.setShape(GradientDrawable.OVAL);
+            dotShape.setColor(0xFF6DD58C);                 // Material green, tone 80: "on"
+            dotShape.setStroke(dp(2), 0xFF0D1B12);
+            dot.setBackground(dotShape);
+            dot.setVisibility(View.GONE);
+            FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(dp(14), dp(14), Gravity.TOP | Gravity.START);
+            dl.setMargins(dp(RING + 10), dp(RING + 10), 0, 0);
+            ringFrame.addView(dot, dl);
+            dot.setElevation(dp(16));
+            String inputId = pkg.substring("input:".length());
+            deviceDots.put(inputId, dot);
+            android.media.tv.TvInputManager tim = getSystemService(android.media.tv.TvInputManager.class);
+            if (tim != null) showDeviceState(inputId, tim.getInputState(inputId));
+        }
         if (inDock) {
             EqualizerBadge badge = new EqualizerBadge(this);
             badge.setVisibility(View.GONE);
@@ -1001,6 +1032,23 @@ public class HomeActivity extends Activity {
         }
         playing = best;
         showNowPlaying();
+    }
+
+    /** The device's "on" dot: visible while the HDMI device reports connected (on), hidden in standby or unplugged. */
+    private void showDeviceState(String inputId, int state) {
+        View dot = deviceDots.get(inputId);
+        if (dot == null) return;
+        boolean on = state == android.media.tv.TvInputManager.INPUT_STATE_CONNECTED;
+        if (on == (dot.getVisibility() == View.VISIBLE)) return;
+        if (on) {
+            dot.setScaleX(0f);
+            dot.setScaleY(0f);
+            dot.setVisibility(View.VISIBLE);
+            dot.animate().scaleX(1f).scaleY(1f).setInterpolator(Motion.FAST_SPATIAL).setDuration(Motion.FAST_SPATIAL_MS).start();
+        } else {
+            dot.animate().scaleX(0f).scaleY(0f).setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS)
+                    .withEndAction(() -> dot.setVisibility(View.GONE)).start();
+        }
     }
 
     /** Show the equalizer badge on the dock tile of the app that's playing (if it's in the dock). */
