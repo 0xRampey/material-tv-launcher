@@ -683,7 +683,7 @@ public class HomeActivity extends Activity {
         FrameLayout ringFrame = new FrameLayout(this);
         ringFrame.setClipChildren(false);
         ringFrame.setPadding(dp(RING), dp(RING), dp(RING), dp(RING));
-        ringFrame.setForeground(ring);
+        ringFrame.setBackground(ring);   // the ring sits in the gap around the card; badges draw above it
         ringFrame.addView(card, new FrameLayout.LayoutParams(w, h));
 
         // Expressive loading indicator: a small shape that morphs while the app takes its time to open.
@@ -717,24 +717,39 @@ public class HomeActivity extends Activity {
             ring.setCornerRadius((focused ? radius * 0.62f : radius) + dp(RING));
             fadeRing(ring, focused);
             if (inDock) shiftNeighbours(holder, focused);
-            caption.animate().alpha(focused ? 1f : (inDock ? 0f : 0.85f))
-                    .setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS).start();
+            caption.animate().cancel();
+            if (inDock && focused) {
+                caption.setVisibility(View.VISIBLE);
+                caption.animate().alpha(1f).setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS).start();
+            } else if (inDock) {
+                caption.animate().alpha(0f).setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS)
+                        .withEndAction(() -> caption.setVisibility(View.GONE)).start();
+            } else {
+                caption.animate().alpha(focused ? 1f : 0.85f).setInterpolator(Motion.FAST_EFFECTS).setDuration(Motion.FAST_EFFECTS_MS).start();
+            }
             caption.setTextColor(focused ? palette.onSurface : palette.onSurfaceVariant);
             if (focused) onTileFocused(pkg, label, art);
         });
 
+        // Status lives under the tile, never on the artwork: an equalizer for the app that's playing, a green dot for
+        // an HDMI device that's on. Focused, the name appears beside it.
+        LinearLayout captionRow = new LinearLayout(this);
+        captionRow.setOrientation(LinearLayout.HORIZONTAL);
+        captionRow.setGravity(Gravity.CENTER);
+        captionRow.setClipChildren(false);
+        caption.setPadding(0, 0, 0, 0);
+        caption.setMaxWidth(w + dp(48) - dp(30));
+        if (inDock) caption.setVisibility(View.GONE);
         if (inDock && device != null) {
             View dot = new View(this);
             GradientDrawable dotShape = new GradientDrawable();
             dotShape.setShape(GradientDrawable.OVAL);
             dotShape.setColor(0xFF6DD58C);                 // Material green, tone 80: "on"
-            dotShape.setStroke(dp(2), 0xFF0D1B12);
             dot.setBackground(dotShape);
             dot.setVisibility(View.GONE);
-            FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(dp(14), dp(14), Gravity.TOP | Gravity.START);
-            dl.setMargins(dp(RING + 10), dp(RING + 10), 0, 0);
-            ringFrame.addView(dot, dl);
-            dot.setElevation(dp(16));
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(10), dp(10));
+            dl.setMarginEnd(dp(8));
+            captionRow.addView(dot, dl);
             String inputId = pkg.substring("input:".length());
             deviceDots.put(inputId, dot);
             android.media.tv.TvInputManager tim = getSystemService(android.media.tv.TvInputManager.class);
@@ -743,14 +758,21 @@ public class HomeActivity extends Activity {
         if (inDock) {
             EqualizerBadge badge = new EqualizerBadge(this);
             badge.setVisibility(View.GONE);
-            FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(dp(30), dp(22), Gravity.TOP | Gravity.END);
-            bl.setMargins(0, dp(RING + 7), dp(RING + 7), 0);
-            ringFrame.addView(badge, bl);
-            badge.setElevation(dp(16));
+            badge.setColors(0x00000000, 0xFFE6E1E5);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(dp(18), dp(22));
+            bl.setMarginEnd(dp(6));
+            captionRow.addView(badge, bl);
             dockBadges.put(pkg, badge);
         }
+        captionRow.addView(caption, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         holder.addView(ringFrame, new LinearLayout.LayoutParams(w + dp(2 * RING), h + dp(2 * RING)));
-        holder.addView(caption, new LinearLayout.LayoutParams(w, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Fixed height so the dock never jumps; a little wider than the tile (negative margins keep the spacing) so a
+        // name with a status mark beside it still fits.
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(w + dp(48), dp(32));
+        rl.topMargin = dp(8);
+        rl.leftMargin = -dp(24);
+        rl.rightMargin = -dp(24);
+        holder.addView(captionRow, rl);
         return holder;
     }
 

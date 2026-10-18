@@ -75,7 +75,9 @@ final class WavyProgress extends View {
         wave.reset();
         wave.moveTo(inset, mid);
         for (float x = inset; x <= end; x += 2f) {
-            wave.lineTo(x, mid + amp * (float) Math.sin(2 * Math.PI * (x / wavelength) - phase));
+            // The wave grows in over the first wavelength, so a just-started song shows a flat line, not a hook.
+            float grow = Math.min(1f, (x - inset) / wavelength);
+            wave.lineTo(x, mid + amp * grow * (float) Math.sin(2 * Math.PI * (x / wavelength) - phase));
         }
         canvas.drawPath(wave, active);
         if (end + gap < w - inset) canvas.drawLine(end + gap, mid, w - inset, mid, track);
