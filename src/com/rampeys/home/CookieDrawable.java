@@ -18,6 +18,7 @@ final class CookieDrawable extends Drawable {
     private final Path path = new Path();
     private int fromLobes, toLobes;
     private float fromDepth, toDepth;
+    private float fromSharp = 1f, toSharp = 1f;
     private float t = 1f;
 
     CookieDrawable(int color, int lobes, float depth) {
@@ -33,12 +34,24 @@ final class CookieDrawable extends Drawable {
 
     /** Start a morph to a new shape; drive it with {@link #setProgress}. */
     void morphTo(int lobes, float depth) {
+        morphTo(lobes, depth, 1f);
+    }
+
+    /** sharpness: 1 = cookie lobes, below 1 = rounder, fuller lobes (clovers), above 1 = pointed (bursts). */
+    void morphTo(int lobes, float depth, float sharpness) {
         // Begin from wherever the current morph has reached.
         fromLobes = t < 0.5f ? fromLobes : toLobes;
         fromDepth = fromDepth + (toDepth - fromDepth) * t;
+        fromSharp = fromSharp + (toSharp - fromSharp) * t;
         toLobes = lobes;
         toDepth = depth;
+        toSharp = sharpness;
         t = 0f;
+    }
+
+    private static float wave(double a, int lobes, float sharp) {
+        float c = (float) Math.cos(lobes * a);
+        return sharp == 1f ? c : Math.signum(c) * (float) Math.pow(Math.abs(c), sharp);
     }
 
     void setProgress(float progress) {
@@ -59,8 +72,8 @@ final class CookieDrawable extends Drawable {
         float r = Math.min(b.width(), b.height()) / 2f / (1f + maxDepth);
         for (int i = 0; i <= STEPS; i++) {
             double a = 2 * Math.PI * i / STEPS;
-            float r1 = r * (1f + fromDepth * (float) Math.cos(fromLobes * a));
-            float r2 = r * (1f + toDepth * (float) Math.cos(toLobes * a));
+            float r1 = r * (1f + fromDepth * wave(a, fromLobes, fromSharp));
+            float r2 = r * (1f + toDepth * wave(a, toLobes, toSharp));
             float rr = r1 + (r2 - r1) * t;
             float x = cx + rr * (float) Math.cos(a);
             float y = cy + rr * (float) Math.sin(a);

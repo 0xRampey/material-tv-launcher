@@ -804,11 +804,13 @@ public class HomeActivity extends Activity {
 
     /** Each app gets its own Expressive shape; moving between apps morphs one outline into the next. */
     private void morphShape(String pkg) {
-        // MaterialShapes cookies come in 4, 6, 7, 9 and 12 sides only.
-        int[] lobes = {9, 7, 12, 6, 4};
-        float[] depths = {0.08f, 0.10f, 0.06f, 0.12f, 0.16f};
+        // Material 3 Expressive shapes (MaterialShapes): Cookie 9, Cookie 12, Clover 4-leaf, Clover 8-leaf, Sunny,
+        // Soft burst, Cookie 6, Cookie 7, Cookie 4.
+        int[] lobes = {9, 12, 4, 8, 14, 10, 6, 7, 4};
+        float[] depths = {0.08f, 0.06f, 0.26f, 0.16f, 0.05f, 0.11f, 0.12f, 0.10f, 0.16f};
+        float[] sharp = {1f, 1f, 0.55f, 0.65f, 1f, 2.4f, 1f, 1f, 1f};
         int k = Math.abs(pkg.hashCode()) % lobes.length;
-        cookie.morphTo(lobes[k], depths[k]);
+        cookie.morphTo(lobes[k], depths[k], sharp[k]);
         ValueAnimator a = ValueAnimator.ofFloat(0f, 1f).setDuration(Motion.DEFAULT_SPATIAL_MS);
         a.setInterpolator(Motion.DEFAULT_SPATIAL);
         a.addUpdateListener(an -> cookie.setProgress((float) an.getAnimatedValue()));
