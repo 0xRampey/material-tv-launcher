@@ -71,11 +71,13 @@ Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings
   [material-color-utilities](https://github.com/material-foundation/material-color-utilities) (the same math
   behind Android's wallpaper colors).
 - **Your consoles, by name.** Instead of a generic "Live TV" tile, devices that announce themselves over HDMI
-  (a PlayStation 5, an Xbox) get their own tile. Select it and the TV switches straight to that input.
+  (a PlayStation 5, an Xbox) get their own tile, with a green dot while they're on. Select it and the TV switches
+  straight to that input.
 - **Now Playing.** When music or video plays in any app (Spotify, YouTube Music, ...), a card shows the art,
-  the song and a play/pause button.
-- **Material 3 Expressive.** Spring motion, a colored focus glow, a connected button group, neighbours that
-  make room, a morphing loader when an app is slow, and Google Sans Flex.
+  the song, a wavy progress line and a play/pause button, and a little equalizer marks the playing app in the dock.
+- **Material 3 Expressive.** Spring motion, a colored focus glow, shapes from the Material shape library that
+  morph as you move, a connected button group, neighbours that make room, a morphing loader when an app is slow,
+  and a Google Sans Flex clock whose weight follows the time of day.
 - **Buttery smooth.** Animations run at your TV's full refresh rate (61 fps with zero janky frames on the 60 Hz
   Hisense below), it uses about 35 MB of memory, and nothing runs while you're in another app.
 
