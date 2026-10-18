@@ -1,0 +1,63 @@
+package com.rampeys.home;
+
+import android.accessibilityservice.AccessibilityService;
+import android.content.Intent;
+import android.os.SystemClock;
+import android.view.KeyEvent;
+import android.view.accessibility.AccessibilityEvent;
+
+/**
+ * Google TV ignores a different default Home app, so this sends the remote's Home button here, and also
+ * steps in whenever Google TV's own home screen comes to the front (after boot, or when an app exits to Home).
+ * It reads no screen content and sends nothing anywhere.
+ */
+public class HomeKeyService extends AccessibilityService {
+
+    private static final String GOOGLE_HOME = "com.google.android.apps.tv.launcherx";
+    private long lastOpen;
+    // If this home screen fails to open, hand Home back to Google TV for a minute, then try again (a single failure,
+    // e.g. right after an update, must not disable the Home button for good).
+    private long cannotOpenUntil;
+
+    @Override protected boolean onKeyEvent(KeyEvent event) {
+        if (blocked() || event.getKeyCode() != KeyEvent.KEYCODE_HOME) return false;
+        if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) openHome();
+        return true;
+    }
+
+    @Override public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (blocked() || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        CharSequence pkg = event.getPackageName();
+        CharSequence cls = event.getClassName();
+        if (pkg != null && GOOGLE_HOME.contentEquals(pkg) && cls != null && cls.toString().endsWith(".HomeActivity")) {
+            openHome();
+        }
+    }
+
+    private boolean blocked() {
+        return SystemClock.elapsedRealtime() < cannotOpenUntil;
+    }
+
+    private void openHome() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastOpen < 700) return;
+        lastOpen = now;
+        Intent home = new Intent(this, HomeActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        try {
+            startActivity(home);
+        } catch (RuntimeException e) {
+            cannotOpenUntil = SystemClock.elapsedRealtime() + 60_000;
+            performGlobalAction(GLOBAL_ACTION_HOME);
+        }
+    }
+
+    @Override protected void onServiceConnected() {
+        // The system binds this service a moment after boot, when Google TV's home screen is already up and has
+        // sent its last window event. In the first minutes after boot, bring this home screen up directly.
+        if (SystemClock.elapsedRealtime() < 5 * 60_000) openHome();
+    }
+
+    @Override public void onInterrupt() {
+    }
+}

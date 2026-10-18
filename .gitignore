@@ -1,0 +1,4 @@
+build/
+*.apk
+*.jks
+.DS_Store

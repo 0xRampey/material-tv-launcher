@@ -1,0 +1,1 @@
+Vendored from https://github.com/material-foundation/material-color-utilities at dd62982dfdefdfc9232ce8d76e122fb1c6d188ae (2026-10-15), java/ only. Apache-2.0 (see LICENSE). Changes: androidx/errorprone annotations removed.

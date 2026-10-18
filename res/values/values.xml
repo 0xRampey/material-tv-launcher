@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="service_description">Opens this home screen when you press Home, instead of Google TV\'s.</string>
+    <color name="night">#0B1026</color>
+    <style name="HomeTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/night</item>
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:spotShadowAlpha">0.55</item>
+        <item name="android:ambientShadowAlpha">0.25</item>
+    </style>
+</resources>
