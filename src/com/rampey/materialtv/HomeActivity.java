@@ -140,7 +140,32 @@ public class HomeActivity extends Activity {
         @Override public void onInputStateChanged(String inputId, int state) {
             showDeviceState(inputId, state);
         }
+
+        // An HDMI device names itself over CEC a little after it appears ("Playback 1" -> "PlayStation 5").
+        @Override public void onInputAdded(String inputId) {
+            refreshDockSoon();
+        }
+
+        @Override public void onInputRemoved(String inputId) {
+            refreshDockSoon();
+        }
+
+        @Override public void onInputUpdated(String inputId) {
+            refreshDockSoon();
+        }
+
+        @Override public void onTvInputInfoUpdated(android.media.tv.TvInputInfo info) {
+            refreshDockSoon();
+        }
     };
+    private final Runnable refreshDock = () -> {
+        if (drifting) fillDock();
+    };
+
+    private void refreshDockSoon() {
+        handler.removeCallbacks(refreshDock);
+        handler.postDelayed(refreshDock, 500);
+    }
     private ImageView nowButton;
     private GradientDrawable nowShape;
     private GradientDrawable nowButtonShape;
@@ -556,8 +581,13 @@ public class HomeActivity extends Activity {
 
     private void fillDock() {
         List<String> present = dockApps();
-        // Kept between visits; rebuild only when the order of the dock changes.
-        String key = TextUtils.join(",", present);
+        // Kept between visits; rebuild only when the dock's order or an HDMI device's name changes.
+        StringBuilder names = new StringBuilder();
+        for (String p : present) {
+            String[] dev = inputDevices.get(p);
+            if (dev != null) names.append('|').append(dev[0]);
+        }
+        String key = TextUtils.join(",", present) + names;
         if (key.equals(dockKey) && dock.getChildCount() > 0) {
             if (!showingApps) dock.getChildAt(0).requestFocus();
             return;
