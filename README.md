@@ -4,7 +4,7 @@
 
 Your most-used apps, in the order you use them, and nothing else. The whole screen takes on the colors of
 whatever app you're on, in Material 3 Expressive. No ads, no recommendation rows, no internet permission, and
-about 35 MB of memory.
+about 40 MB of memory.
 
 ![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
 
@@ -62,8 +62,6 @@ Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings
 
 ## What you get
 
-![The PlayStation 5 in focus: a console tile named over HDMI-CEC with a green dot because it is on, and the screen re-tinted to PlayStation blue](docs/home.png)
-
 - **Your apps, by use.** The dock shows the six apps you use most, most used on the left. It reorders itself
   as your habits change. Nothing is hardcoded, so it works for anyone's TV.
 - **Colors from the app you're on.** As you move, the background, the shape, the buttons and the Now Playing
@@ -79,7 +77,7 @@ Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings
   morph as you move, a connected button group, neighbours that make room, a morphing loader when an app is slow,
   and a Google Sans Flex clock whose weight follows the time of day.
 - **Buttery smooth.** Animations run at your TV's full refresh rate (61 fps with zero janky frames on the 60 Hz
-  Hisense below), it uses about 35 MB of memory, and nothing runs while you're in another app.
+  Hisense below), it uses about 40 MB of memory, and nothing runs while you're in another app.
 
 **And a screensaver that follows the sun.** *Material TV Clock* draws a fresh Material You-style wallpaper
 every hour: indigo at night, peach at sunrise, sky blue at midday, orange at sunset.
@@ -104,7 +102,7 @@ Nvidia Shield and others. Not supported: Samsung (Tizen), LG (webOS) and Amazon 
 
 | Tested on | OS | Notes |
 |---|---|---|
-| Hisense 85" 4K Google TV (A53H, MediaTek) | Google TV 12 | Home takeover via the accessibility service |
+| Hisense 4K Google TV (MediaTek MT9689, 2.4 GB RAM) | Google TV, Android 12 | Home takeover via the accessibility service |
 
 Tried it on another TV? Please add a row, see [Contributing](#contributing).
 
@@ -167,8 +165,9 @@ It's a full kit for cleaning up a TV, with its own Apple TV-style launcher. This
 being as light as possible on weak TVs, in Material 3 Expressive. You can use it on its own or alongside it.
 
 **How much memory does it use?**
-35 MB (`adb shell dumpsys meminfo com.rampeys.home`, one reading on the Hisense above). On the same TV, Google
-TV's own home used 240–380 MB. Your numbers will differ.
+About 40 MB (35–43 MB PSS in `adb shell dumpsys meminfo com.rampeys.home` on the Hisense above). On the same
+TV, Google TV's own home used about 150 MB PSS across its two processes, measured the same way. One reading each;
+your numbers will differ.
 
 **Does it switch my PS5 on?**
 Only when you select its tile. Switching to the input wakes the console over HDMI-CEC, same as the TV's input
