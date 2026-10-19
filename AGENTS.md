@@ -37,7 +37,7 @@ Spatial (movement, scale, shape) may overshoot: fast 350 ms for small components
 Effects (color, opacity) never overshoot: fast 150 ms, default 200 ms. Do not add other curves or durations.
 
 **Focus** (TV): scale 1.10 with the fast spatial curve, a 3 dp ring 6 dp outside the tile that fades in, a glow in
-the app's own color (`setOutlineSpotShadowColor`), neighbours shift 8 dp aside (standard button group). Buttons and
+the app's own color (`setOutlineSpotShadowColor`), neighbors shift 8 dp aside (standard button group). Buttons and
 nav fill with `inverseSurface` on focus.
 
 **Type**: Google Sans Flex with `'ROND' 0` (never rounded), `opsz` 24 for UI and 48 for display. The focused app

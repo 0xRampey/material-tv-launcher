@@ -716,7 +716,7 @@ public class HomeActivity extends Activity {
             corners.start();
             ring.setCornerRadius((focused ? radius * 0.62f : radius) + dp(RING));
             fadeRing(ring, focused);
-            if (inDock) shiftNeighbours(holder, focused);
+            if (inDock) shiftNeighbors(holder, focused);
             caption.animate().cancel();
             if (inDock && focused) {
                 caption.setVisibility(View.VISIBLE);
@@ -785,8 +785,8 @@ public class HomeActivity extends Activity {
         a.start();
     }
 
-    /** Standard button-group behaviour on the dock: the neighbours of the focused tile make a little room. */
-    private void shiftNeighbours(View holder, boolean focused) {
+    /** Standard button-group behavior on the dock: the neighbors of the focused tile make a little room. */
+    private void shiftNeighbors(View holder, boolean focused) {
         if (!(holder.getParent() instanceof ViewGroup)) return;
         ViewGroup row = (ViewGroup) holder.getParent();
         int at = row.indexOfChild(holder);

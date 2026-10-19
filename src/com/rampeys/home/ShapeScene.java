@@ -26,7 +26,7 @@ final class ShapeScene extends View {
     private static final class Item {
         Path path;
         int color;
-        float cx, cy;         // centre, fraction of width/height
+        float cx, cy;         // center, fraction of width/height
         float rot, spin;      // degrees, degrees per second
         float ax, ay, period; // drift amplitude (px) and period (s)
         float phase;
@@ -111,7 +111,7 @@ final class ShapeScene extends View {
         canvas.drawRect(0, 0, w * 0.6f, h, scrim);
     }
 
-    /** Material 3 Expressive-style shapes, centred on the origin. */
+    /** Material 3 Expressive-style shapes, centered on the origin. */
     private static Path shape(int kind, float s, Random r) {
         Path p = new Path();
         switch (kind) {

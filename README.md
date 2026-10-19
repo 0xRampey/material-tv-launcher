@@ -8,8 +8,7 @@ about 40 MB of memory.
 
 ![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
 
-It's a home screen for any Android TV or Google TV: as light as it can be, and looking like it belongs on a
-Pixel.
+It's a home screen for any Android TV or Google TV: pretty light, and looking like it belongs on a Pixel.
 
 ---
 
@@ -24,7 +23,7 @@ Pixel.
 - [Troubleshooting](#troubleshooting)
 - [Questions people ask](#questions-people-ask)
 - [Contributing](#contributing)
-- [Licence](#licence)
+- [License](#license)
 
 ---
 
@@ -34,7 +33,7 @@ Google TV ignores any home screen that isn't its own, so a launcher needs a litt
 
 1. **Install** one APK from your computer over Wi-Fi, using the TV's debug bridge (ADB).
 2. **Switch on** three things with one script: a tiny accessibility service that sends the remote's Home button
-   here, usage access to order your apps, and media access for the Now Playing card.
+   here, usage access to order your apps, and notification access so the Now Playing card can see which app is playing.
 3. **Press Home.** That's it. Nothing on the TV is removed, and one command puts everything back.
 
 ## Quick start
@@ -43,9 +42,9 @@ You need a computer on the same Wi-Fi as the TV, with
 [ADB](https://developer.android.com/tools/releases/platform-tools) installed.
 
 **1. On the TV**
-Settings → System → About → press OK on **Android TV OS build** seven times → go back → Developer options →
-turn on **USB debugging** (and **Network debugging** if you see it). Note the TV's IP address under Settings →
-Network.
+Settings → System → About (on Android TV: Settings → Device Preferences → About) → press OK on **Android TV OS
+build** seven times → go back → Developer options → turn on **USB debugging** (and **Network debugging** if you
+see it). Note the TV's IP address under Settings → Network & Internet.
 
 **2. On your computer**
 Download `material-tv-launcher-<version>.apk` and `install.sh` from the [latest release](../../releases/latest)
@@ -56,14 +55,14 @@ bash install.sh 192.168.1.50 material-tv-launcher-<version>.apk
 ```
 
 **3. On the TV again**
-Accept **Allow USB debugging?**, then press Home on the remote.
+When the TV shows **Allow USB debugging?**, accept it; the script waits for you. Then press Home on the remote.
 
 Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings Google TV's home back.
 
 ## What you get
 
 - **Your apps, by use.** The dock shows the six apps you use most, most used on the left. It reorders itself
-  as your habits change. Nothing is hardcoded, so it works for anyone's TV.
+  as your habits change. No app list is hardcoded, so it works on anyone's TV.
 - **Colors from the app you're on.** As you move, the background, the shape, the buttons and the Now Playing
   card re-tint to the focused app, using Google's own
   [material-color-utilities](https://github.com/material-foundation/material-color-utilities) (the same math
@@ -74,10 +73,11 @@ Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings
 - **Now Playing.** When music or video plays in any app (Spotify, YouTube Music, ...), a card shows the art,
   the song, a wavy progress line and a play/pause button, and a little equalizer marks the playing app in the dock.
 - **Material 3 Expressive.** Spring motion, a colored focus glow, shapes from the Material shape library that
-  morph as you move, a connected button group, neighbours that make room, a morphing loader when an app is slow,
+  morph as you move, a connected button group, neighbors that make room, a morphing loader when an app is slow,
   and a Google Sans Flex clock whose weight follows the time of day.
-- **Buttery smooth.** Animations run at your TV's full refresh rate with zero janky frames, even on a budget
-  TV chip. It uses about 40 MB of memory, and nothing runs while you're in another app.
+- **Buttery smooth.** Animations run on every display frame: zero janky frames at 60 Hz (`dumpsys gfxinfo`) on a
+  budget quad-core TV chip. It uses about 40 MB of memory, and nothing animates or polls while you're in another
+  app.
 
 **And a screensaver that follows the sun.** *Material TV Clock* draws a fresh Material You-style wallpaper
 every hour: indigo at night, peach at sunrise, sky blue at midday, orange at sunset.
@@ -91,13 +91,14 @@ every hour: indigo at night, peach at sunrise, sky blue at midday, orange at sun
 adb shell settings put secure screensaver_components com.rampeys.home/com.rampeys.home.Screensaver
 ```
 
-Back to the stock one: `adb shell settings put secure screensaver_components com.android.dreams.basic/com.android.dreams.basic.Colors`.
+Before switching, save the current one with `adb shell settings get secure screensaver_components`; to go back,
+`put` that value again.
 It starts after the TV's idle time (`adb shell settings get system screen_off_timeout`).
 </details>
 
 ## Supported TVs
 
-Any TV running **Google TV** or **Android TV 12 or newer**, from any brand. Not supported: Samsung (Tizen),
+Any TV running Android TV or Google TV on **Android 12 or newer**, from any brand. Not supported: Samsung (Tizen),
 LG (webOS) and Amazon Fire TV (Fire OS).
 
 Tried it on your TV? A short report with a screenshot helps others, see [Contributing](#contributing).
@@ -146,10 +147,10 @@ elsewhere. The code is plain Java:
 - **Google TV flashes for a second after the TV boots.** Expected: Android starts the service a moment after
   boot, then this launcher takes over.
 - **`adb` says unauthorized.** Accept the **Allow USB debugging?** prompt on the TV and run the script again.
-- **No Now Playing card.** The app has to publish what it's playing. Some, like the YouTube TV app, also stop
-  playing as soon as you leave them.
-- **No console tile.** Your console has to announce itself over HDMI-CEC. Turn on HDMI-CEC (often called
-  "Anynet+", "BRAVIA Sync" or "HDMI Device Control") on both the TV and the console.
+- **No Now Playing card.** The app has to publish what it's playing. Some apps also stop playing as soon as you
+  leave them.
+- **No console tile.** Your console has to announce itself over HDMI-CEC. Turn on HDMI-CEC (your TV may call it
+  "HDMI Device Control" or a brand name ending in Sync or Link) on both the TV and the console.
 
 ## Questions people ask
 
@@ -157,8 +158,8 @@ elsewhere. The code is plain Java:
 No. It's one ordinary app. Nothing is rooted, flashed or deleted, and `uninstall.sh` undoes everything.
 
 **Why not [tv-vibehack](https://github.com/Gathin23/tv-vibehack)?**
-It's a full kit for cleaning up a TV, with its own Apple TV-style launcher. This is only a launcher, aimed at
-being as light as possible on weak TVs, in Material 3 Expressive. You can use it on its own or alongside it.
+It's a full kit for cleaning up a TV, with its own Apple TV-style launcher. This is only a launcher: pretty light, made
+for weak TVs, in Material 3 Expressive. You can use this launcher on its own or alongside tv-vibehack.
 
 **How much memory does it use?**
 About 40 MB (PSS in `adb shell dumpsys meminfo com.rampeys.home`). On our test TV, Google TV's own home used
@@ -176,7 +177,7 @@ Not yet. The dock follows what you use. A pin option is a welcome contribution.
 The most useful thing you can send is a tested-TV report with a screenshot. Launcher ideas that keep it light
 are welcome too: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Licence
+## License
 
 Apache 2.0, see [`LICENSE`](LICENSE). Bundled:
 [material-color-utilities](https://github.com/material-foundation/material-color-utilities) (Apache 2.0) and
