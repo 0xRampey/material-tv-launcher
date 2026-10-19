@@ -41,5 +41,5 @@ if [ ! -f "$KS" ] && [ -z "${KEYSTORE:-}" ]; then
   keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias androiddebugkey \
     -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
 fi
-"$BT/apksigner" sign --ks "$KS" --ks-key-alias "$ALIAS" --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --out "$OUT/home.apk" "$OUT/aligned.apk"
-"$BT/apksigner" verify "$OUT/home.apk" && ls -la "$OUT/home.apk"
+"$BT/apksigner" sign --ks "$KS" --ks-key-alias "$ALIAS" --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --out "$OUT/material-tv-launcher.apk" "$OUT/aligned.apk"
+"$BT/apksigner" verify "$OUT/material-tv-launcher.apk" && ls -la "$OUT/material-tv-launcher.apk"

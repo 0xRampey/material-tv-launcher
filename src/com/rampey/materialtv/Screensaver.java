@@ -82,8 +82,9 @@ public class Screensaver extends DreamService {
             seed = seed * 6364136223846793005L + 1442695040888963407L;
             ShapeScene next = sceneForNow();
             next.setAlpha(0f);
-            root.addView(next, 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             ShapeScene old = scene;
+            root.addView(next, root.indexOfChild(old) + 1,
+                    new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             scene = next;
             next.animate().alpha(1f).setDuration(2400).setInterpolator(new PathInterpolator(0.2f, 0f, 0f, 1f))
                     .withEndAction(() -> root.removeView(old)).start();

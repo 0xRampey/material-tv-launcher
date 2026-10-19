@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
 # Install the launcher on an Android TV over ADB and grant what it needs.
-#   ./install.sh <tv-ip> [path/to/home.apk]
+#   ./install.sh <tv-ip> [path/to/material-tv-launcher.apk]
+# Uses material-tv-launcher.apk next to this script (the release download), else build/material-tv-launcher.apk.
 # Before: on the TV, turn on Developer options > USB debugging (and Network debugging if listed), then accept the
-# "Allow debugging?" prompt the first time this connects.
+# "Allow USB debugging?" prompt the first time this connects.
 set -euo pipefail
 IP="${1:?usage: ./install.sh <tv-ip> [apk]}"
-APK="${2:-$(dirname "$0")/build/home.apk}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+APK="${2:-}"
+if [[ -z "$APK" ]]; then
+  for c in "$HERE/material-tv-launcher.apk" "$HERE/build/material-tv-launcher.apk"; do
+    [[ -f "$c" ]] && { APK="$c"; break; }
+  done
+fi
+[[ -n "$APK" && -f "$APK" ]] || { echo "No APK found. Put material-tv-launcher.apk next to install.sh, or pass its path." >&2; exit 1; }
 PKG=com.rampey.materialtv
 T="$IP:5555"
 S() { adb -s "$T" shell "$@" | tr -d '\r'; }
 
-adb connect "$T" >/dev/null
+if ! adb connect "$T" | grep -q "connected"; then
+  echo "Can't reach the TV at $IP. Check the IP and that USB debugging (or Network debugging) is on." >&2
+  exit 1
+fi
+echo "If the TV asks \"Allow USB debugging?\", accept it. Waiting for the TV ..."
 adb -s "$T" wait-for-device
 echo "Installing $APK ..."
 adb -s "$T" install -r "$APK"
@@ -31,4 +43,11 @@ fi
 S settings put secure accessibility_enabled 1
 
 S am start -n "$PKG/.HomeActivity" >/dev/null
-echo "Done. Press Home on the remote; undo everything with ./uninstall.sh $IP"
+for _ in 1 2 3 4 5 6 7 8; do
+  if S dumpsys activity activities | grep -m1 ResumedActivity | grep -q "$PKG"; then
+    echo "Done: Material TV Launcher is on screen. Press Home on the remote anytime. Undo with ./uninstall.sh $IP"
+    exit 0
+  fi
+  sleep 1
+done
+echo "Installed, but the launcher isn't on screen yet. Press Home on the remote. Undo with ./uninstall.sh $IP"

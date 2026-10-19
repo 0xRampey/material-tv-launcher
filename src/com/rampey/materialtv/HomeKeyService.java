@@ -8,12 +8,14 @@ import android.view.accessibility.AccessibilityEvent;
 
 /**
  * Google TV ignores a different default Home app, so this sends the remote's Home button here, and also
- * steps in whenever Google TV's own home screen comes to the front (after boot, or when an app exits to Home).
+ * steps in whenever the stock home screen (Google TV's, or classic Android TV's) comes to the front, after boot or
+ * when an app exits to Home.
  * It reads no screen content and sends nothing anywhere.
  */
 public class HomeKeyService extends AccessibilityService {
 
-    private static final String GOOGLE_HOME = "com.google.android.apps.tv.launcherx";
+    private static final String GOOGLE_TV_HOME = "com.google.android.apps.tv.launcherx";
+    private static final String ANDROID_TV_HOME = "com.google.android.tvlauncher";
     private long lastOpen;
     // If this home screen fails to open, hand Home back to Google TV for a minute, then try again (a single failure,
     // e.g. right after an update, must not disable the Home button for good).
@@ -29,7 +31,10 @@ public class HomeKeyService extends AccessibilityService {
         if (blocked() || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         CharSequence pkg = event.getPackageName();
         CharSequence cls = event.getClassName();
-        if (pkg != null && GOOGLE_HOME.contentEquals(pkg) && cls != null && cls.toString().endsWith(".HomeActivity")) {
+        if (pkg == null || cls == null) return;
+        String c = cls.toString();
+        if ((GOOGLE_TV_HOME.contentEquals(pkg) && c.endsWith(".HomeActivity"))
+                || (ANDROID_TV_HOME.contentEquals(pkg) && c.endsWith(".MainActivity"))) {
             openHome();
         }
     }

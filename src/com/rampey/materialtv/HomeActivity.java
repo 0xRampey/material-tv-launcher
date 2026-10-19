@@ -17,19 +17,14 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
-import android.net.Uri;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
 import android.os.Bundle;
-import android.os.FileObserver;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -39,12 +34,8 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.LinearInterpolator;
-import android.view.animation.OvershootInterpolator;
 import android.view.animation.PathInterpolator;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
@@ -56,9 +47,7 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.text.SimpleDateFormat;
-import java.util.TreeMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -72,11 +61,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A Material 3 Expressive home screen for TV: the background and accents take their color from the app in focus,
- * one dock of favorites, everything else on an Apps page. No network, no tracking.
+ * one dock of your most-used apps, everything else on an Apps page. No network, no tracking.
  */
 public class HomeActivity extends Activity {
-
-    /** Favorites, left to right. Apps that are missing or disabled are skipped. */
 
     private static final int SIDE = 48, DOCK_PAD = 8, SCROLL_PAD = 18, GAP = 14, RING = 6, APP_MARGIN = 9;
 
@@ -461,7 +448,11 @@ public class HomeActivity extends Activity {
             out.remove(at);
             out.addAll(at, devices);
             while (out.size() > DOCK_SIZE) out.remove(out.size() - 1);
+        } else if (!devices.isEmpty()) {
+            // Not used much yet (a fresh TV): consoles still get a tile when there's room.
+            for (String d : devices) if (out.size() < DOCK_SIZE) out.add(d);
         }
+        boolean devicesShown = !devices.isEmpty() && out.contains(devices.get(0));
         // Top up from this TV's own installed apps: most recently used first, then the newest installs.
         if (out.size() < DOCK_SIZE) {
             java.util.Map<String, Long> lastUsed = new java.util.HashMap<>();
@@ -476,7 +467,7 @@ public class HomeActivity extends Activity {
             for (ResolveInfo info : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0)) {
                 String pkg = info.activityInfo.packageName;
                 if (!out.contains(pkg) && !rest.contains(pkg) && !pkg.equals(getPackageName()) && !NOT_IN_DOCK.contains(pkg)
-                        && !screensavers.contains(pkg)) rest.add(pkg);
+                        && !screensavers.contains(pkg) && !(devicesShown && pkg.equals(inputApp))) rest.add(pkg);
             }
             rest.sort((a, b) -> {
                 int byUse = Long.compare(lastUsed.getOrDefault(b, 0L), lastUsed.getOrDefault(a, 0L));

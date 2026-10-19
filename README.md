@@ -9,11 +9,6 @@ No ads, no recommendations, no internet permission, about 40 MB of memory.
 
 [![Download APK](https://img.shields.io/badge/Download-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/0xRampey/material-tv-launcher/releases/latest/download/material-tv-launcher.apk)
 
-![Android 12+](https://img.shields.io/badge/Android-12%2B-3DDC84?style=flat-square)
-![Android TV and Google TV](https://img.shields.io/badge/Android_TV-Google_TV-4285F4?style=flat-square)
-![No internet permission](https://img.shields.io/badge/internet_permission-none-555555?style=flat-square)
-![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)
-
 </div>
 
 **Install it with your coding agent.** Turn on USB debugging on the TV ([how](#quick-start)), then paste this
@@ -24,7 +19,7 @@ Install Material TV Launcher (https://github.com/0xRampey/material-tv-launcher) 
 by following its Quick start. My TV's IP address is 192.168.1.50.
 ```
 
-Use your TV's own IP address (Settings → Network). Rather do it yourself? See [Quick start](#quick-start).
+Use your TV's own IP address (Settings → Network & Internet). Rather do it yourself? See [Quick start](#quick-start).
 
 ![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
 
@@ -63,17 +58,22 @@ build** seven times → go back → Developer options → turn on **USB debuggin
 see it). Note the TV's IP address under Settings → Network & Internet.
 
 **2. On your computer**
-Download `material-tv-launcher.apk` and `install.sh` from the [latest release](../../releases/latest)
-into one folder, then run:
+Download the app and the scripts from the
+[latest release](https://github.com/0xRampey/material-tv-launcher/releases/latest) into one folder, then run
+`install.sh` with your TV's IP address:
 
 ```bash
-bash install.sh 192.168.1.50 material-tv-launcher.apk
+curl -fLO https://github.com/0xRampey/material-tv-launcher/releases/latest/download/material-tv-launcher.apk
+curl -fLO https://github.com/0xRampey/material-tv-launcher/releases/latest/download/install.sh
+curl -fLO https://github.com/0xRampey/material-tv-launcher/releases/latest/download/uninstall.sh
+bash install.sh 192.168.1.50
 ```
 
 **3. On the TV again**
-When the TV shows **Allow USB debugging?**, accept it; the script waits for you. Then press Home on the remote.
+When the TV shows **Allow USB debugging?**, accept it; the script waits for you. It finishes with
+`Done: Material TV Launcher is on screen.` From then on, Home on the remote brings it up.
 
-Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings Google TV's home back.
+Changed your mind? `bash uninstall.sh 192.168.1.50` brings the TV's own home screen back.
 
 ## What you get
 
@@ -114,15 +114,16 @@ It starts after the TV's idle time (`adb shell settings get system screen_off_ti
 
 ## Supported TVs
 
-Any TV running Android TV or Google TV on **Android 12 or newer**, from any brand. Untested: Amazon Fire TV (Fire OS,
-which is based on Android). Not supported: Samsung (Tizen) and LG (webOS).
+Any TV running Android TV or Google TV on **Android 12 or newer**, from any brand. Tested on Google TV. Untested:
+classic Android TV (the Home button should work the same way) and Amazon Fire TV (Fire OS, which is based on
+Android). Not supported: Samsung (Tizen) and LG (webOS).
 
 Tried it on your TV? A short report with a screenshot helps others, see [Contributing](#contributing).
 
 ## Privacy
 
 The app has **no internet permission**, so nothing it reads can leave the TV. Check it yourself:
-`aapt2 dump permissions material-tv-launcher.apk`.
+`aapt2 dump permissions material-tv-launcher.apk` (`aapt2` comes with the Android SDK build-tools).
 
 | `install.sh` switches on | Why |
 |---|---|
@@ -138,7 +139,7 @@ The app has **no internet permission**, so nothing it reads can leave the TV. Ch
 You need the Android SDK (platform 34, build-tools 34.0.0) and JDK 17.
 
 ```bash
-./build.sh                    # → build/home.apk, signed with your Android debug key
+./build.sh                    # → build/material-tv-launcher.apk, signed with your Android debug key
 ./install.sh 192.168.1.50
 ```
 
