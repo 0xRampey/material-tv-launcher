@@ -4,6 +4,7 @@ import android.animation.ArgbEvaluator;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Intent;
@@ -24,6 +25,7 @@ import android.media.tv.TvInputManager;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -58,6 +60,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A Material 3 Expressive home screen for TV: the background and accents take their color from the app in focus,
@@ -169,12 +173,16 @@ public class HomeActivity extends Activity {
     private ImageView nowButton;
     private GradientDrawable nowShape;
     private GradientDrawable nowButtonShape;
+    // The callbacks hand over the session's metadata and state; they are kept rather than fetched again from the
+    // controller, which would re-parcel the whole bundle (album art included) several times a second.
     private final MediaController.Callback mediaCallback = new MediaController.Callback() {
         @Override public void onMetadataChanged(MediaMetadata metadata) {
+            liveMeta = metadata;
             showNowPlaying();
         }
 
         @Override public void onPlaybackStateChanged(PlaybackState state) {
+            liveState = state;
             showNowPlaying();
         }
 
@@ -268,6 +276,7 @@ public class HomeActivity extends Activity {
         // Build the Apps page quietly once Home is showing, so opening it later is instant.
         handler.removeCallbacks(prebuildApps);
         handler.postDelayed(prebuildApps, 1500);
+        foreground = true;
         startNowPlaying();
         android.media.tv.TvInputManager inputs = getSystemService(android.media.tv.TvInputManager.class);
         if (inputs != null) {
@@ -285,10 +294,20 @@ public class HomeActivity extends Activity {
         handler.removeCallbacks(prebuildApps);
         if (colorAnimator != null) colorAnimator.end();
         handler.removeCallbacks(settle);
-        stopNowPlaying();
+        // The media session stays watched (it only updates fields, never views) so the card remembers what played
+        // while another app had the screen; it is let go in onDestroy.
+        foreground = false;
+        handler.removeCallbacks(checkResumed);
         android.media.tv.TvInputManager inputs = getSystemService(android.media.tv.TvInputManager.class);
         if (inputs != null) inputs.unregisterCallback(inputCallback);
         hideLoader();
+    }
+
+    @Override protected void onDestroy() {
+        stopNowPlaying();
+        handler.removeCallbacks(expire);
+        handler.removeCallbacks(checkResumed);
+        super.onDestroy();
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -998,7 +1017,7 @@ public class HomeActivity extends Activity {
         appsPage.setVisibility(View.GONE);
         homePage.setVisibility(View.VISIBLE);
         nav.select(0);
-        if (nowCard != null && playing != null) showNowPlaying();
+        if (nowCard != null) showNowPlaying();
         if (dock.getChildCount() > 0) dock.getChildAt(0).requestFocus();
     }
 
@@ -1089,7 +1108,10 @@ public class HomeActivity extends Activity {
                 sessions = getSystemService(MediaSessionManager.class);
                 mediaListener = new ComponentName(this, MediaListener.class);
             }
-            sessions.addOnActiveSessionsChangedListener(sessionsChanged, mediaListener);
+            if (!listening) {
+                sessions.addOnActiveSessionsChangedListener(sessionsChanged, mediaListener);
+                listening = true;
+            }
             pickSession();
         } catch (SecurityException notAllowed) {
             // Notification access not granted: the card simply stays hidden.
@@ -1098,34 +1120,54 @@ public class HomeActivity extends Activity {
     }
 
     private void stopNowPlaying() {
-        if (sessions != null) {
+        if (listening) {
             try {
                 sessions.removeOnActiveSessionsChangedListener(sessionsChanged);
             } catch (RuntimeException ignored) {
             }
+            listening = false;
         }
         if (playing != null) playing.unregisterCallback(mediaCallback);
         playing = null;
+        liveMeta = null;
+        liveState = null;
     }
 
     private void pickSession() {
+        if (!listening) return;   // a change posted before onDestroy let the listener go: nothing to pick for
         MediaController best = null;
+        MediaMetadata bestMeta = null;
+        PlaybackState bestState = null;
         try {
             for (MediaController c : sessions.getActiveSessions(mediaListener)) {
-                if (c.getMetadata() == null) continue;
+                MediaMetadata m = c.getMetadata();
+                if (m == null) continue;
                 PlaybackState st = c.getPlaybackState();
-                if (best == null || (st != null && st.getState() == PlaybackState.STATE_PLAYING)) best = c;
+                if (best == null || (st != null && st.getState() == PlaybackState.STATE_PLAYING)) {
+                    best = c;
+                    bestMeta = m;
+                    bestState = st;
+                }
             }
         } catch (SecurityException e) {
             best = null;
         }
-        if (playing != null && (best == null || !best.getSessionToken().equals(playing.getSessionToken()))) {
-            playing.unregisterCallback(mediaCallback);
-        }
-        if (best != null && (playing == null || !best.getSessionToken().equals(playing.getSessionToken()))) {
-            best.registerCallback(mediaCallback, handler);
+        // getActiveSessions hands out a new controller object for the same session each time: the callback is
+        // registered on exactly one object per token, so keep that object when the token is unchanged (a register or
+        // unregister on a fresh twin would leave the old registration writing liveMeta/liveState for a stale session).
+        boolean same = playing != null && best != null && best.getSessionToken().equals(playing.getSessionToken());
+        if (same) {
+            best = playing;
+        } else {
+            if (playing != null) playing.unregisterCallback(mediaCallback);
+            if (best != null) {
+                best.registerCallback(mediaCallback, handler);
+                sessionPlayFailed = false;
+            }
         }
         playing = best;
+        liveMeta = bestMeta;
+        liveState = bestState;
         showNowPlaying();
     }
 
@@ -1166,31 +1208,65 @@ public class HomeActivity extends Activity {
         }
     }
 
+    // The last thing that played, kept after its app lets the session go (YouTube stops as soon as you leave it),
+    // with whatever the app gave us to get back to it: an item id/uri or the session's own activity when it posts
+    // one (Spotify and YouTube on this TV post neither, so for them play reopens the app and the card is a reminder).
+    // The fields follow every session callback, also while another app has the screen; views are touched on Home only.
+    private static final long REMEMBER_MS = 6 * 3_600_000L;
+    private static final long RESUME_CHECK_MS = 1500;
+    private boolean listening;               // the active-sessions listener is registered (until onDestroy)
+    private boolean foreground;              // between onResume and onPause: the card may be drawn
+    private MediaMetadata liveMeta;          // what the picked session last reported (one fetch per pick, then callbacks)
+    private PlaybackState liveState;
+    private CharSequence lastTitle, lastArtist;
+    private Bitmap lastArt, shownArt;
+    private String lastPkg, lastItem, lastMediaId, lastMediaUri;
+    private PendingIntent lastSessionActivity;
+    private int lastState;
+    private float lastSpeed;
+    private long lastPosition, lastUpdateTime, lastDuration, lastSeenAt;
+    private boolean wasActive, showingRemembered, sessionPlayFailed;
+    private final Runnable expire = () -> {
+        forget();
+        if (foreground && nowCard != null) showNowPlaying();
+    };
+    // play() went to a session that only said it could play: if nothing is playing after a moment, go on to the app.
+    private final Runnable checkResumed = () -> {
+        if (!foreground || !showingRemembered) return;
+        sessionPlayFailed = true;
+        resumeRemembered();
+    };
+
     private void showNowPlaying() {
-        if (nowCard != null) updateBadges();
-        MediaMetadata m = playing != null ? playing.getMetadata() : null;
-        PlaybackState st = playing != null ? playing.getPlaybackState() : null;
-        boolean active = m != null && st != null
-                && (st.getState() == PlaybackState.STATE_PLAYING || st.getState() == PlaybackState.STATE_PAUSED);
+        MediaMetadata m = playing != null ? liveMeta : null;
+        PlaybackState st = playing != null ? liveState : null;
+        int state = st != null ? st.getState() : PlaybackState.STATE_NONE;
+        boolean running = state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_BUFFERING;
+        boolean active = m != null && (running || state == PlaybackState.STATE_PAUSED);
+        if (active) remember(m, st);
+        else if (wasActive) freeze();
+        wasActive = active;
+        if (!foreground || nowCard == null) return;
+        updateBadges();
+        if (!active && !showingApps && lastPkg != null
+                && System.currentTimeMillis() - lastSeenAt < REMEMBER_MS && launchIntent(lastPkg) != null) {
+            showRemembered();
+            return;
+        }
+        showingRemembered = false;
         if (!active || showingApps) {
             if (nowCard.getVisibility() == View.VISIBLE) {
                 nowCard.animate().alpha(0f).setDuration(200).withEndAction(() -> nowCard.setVisibility(View.GONE)).start();
             }
             return;
         }
-        CharSequence title = m.getText(MediaMetadata.METADATA_KEY_TITLE);
-        CharSequence artist = m.getText(MediaMetadata.METADATA_KEY_ARTIST);
-        if (artist == null) artist = m.getText(MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
-        Bitmap art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
-        if (art == null) art = m.getBitmap(MediaMetadata.METADATA_KEY_ART);
-        nowTitle.setText(title != null ? title : "");
-        nowArtist.setText(artist != null ? artist : appLabel(playing.getPackageName()));
-        nowArt.setImageBitmap(art);
-        long duration = m.getLong(MediaMetadata.METADATA_KEY_DURATION);
-        nowProgress.setVisibility(duration > 0 ? View.VISIBLE : View.GONE);
-        nowProgress.setState(st.getPosition(), st.getLastPositionUpdateTime(), st.getPlaybackSpeed(), duration,
-                st.getState() == PlaybackState.STATE_PLAYING);
-        nowButton.setImageResource(st.getState() == PlaybackState.STATE_PLAYING ? R.drawable.ic_pause : R.drawable.ic_play);
+        handler.removeCallbacks(checkResumed);
+        nowTitle.setText(lastTitle);
+        nowArtist.setText(lastArtist);
+        showArt();
+        nowProgress.setVisibility(lastDuration > 0 ? View.VISIBLE : View.GONE);
+        nowProgress.setState(st.getPosition(), st.getLastPositionUpdateTime(), st.getPlaybackSpeed(), lastDuration, running);
+        nowButton.setImageResource(running ? R.drawable.ic_pause : R.drawable.ic_play);
         styleNowPlaying();
         // Cancel a pending fade-out first: its end action would otherwise hide the card again.
         nowCard.animate().cancel();
@@ -1202,11 +1278,197 @@ public class HomeActivity extends Activity {
         }
     }
 
+    /**
+     * Note what the live session shows, on every callback, so the card can bring it back once the session is gone.
+     * A session reports several times a second, so anything that costs a binder or PackageManager call (the session
+     * activity, the app label standing in for a missing artist) or copies the art is done once per item only.
+     */
+    private void remember(MediaMetadata m, PlaybackState st) {
+        CharSequence title = m.getText(MediaMetadata.METADATA_KEY_TITLE);
+        CharSequence artist = m.getText(MediaMetadata.METADATA_KEY_ARTIST);
+        if (artist == null) artist = m.getText(MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
+        String pkg = playing.getPackageName();
+        String item = pkg + "|" + m.getString(MediaMetadata.METADATA_KEY_MEDIA_ID) + "|" + title + "|" + artist + "|"
+                + m.getText(MediaMetadata.METADATA_KEY_ALBUM);
+        if (!item.equals(lastItem)) {
+            lastItem = item;
+            lastTitle = title != null ? title : "";
+            lastArtist = artist != null ? artist : appLabel(pkg);
+            lastPkg = pkg;
+            lastSessionActivity = playing.getSessionActivity();
+            lastArt = null;
+        }
+        // The art copies made the card flicker: fetch it for a new item only, or until it arrives for the current one.
+        if (lastArt == null) {
+            Bitmap art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+            if (art == null) art = m.getBitmap(MediaMetadata.METADATA_KEY_ART);
+            lastArt = art;
+        }
+        lastMediaId = m.getString(MediaMetadata.METADATA_KEY_MEDIA_ID);
+        lastMediaUri = m.getString(MediaMetadata.METADATA_KEY_MEDIA_URI);
+        lastDuration = m.getLong(MediaMetadata.METADATA_KEY_DURATION);
+        lastState = st.getState();
+        lastPosition = st.getPosition();
+        lastUpdateTime = st.getLastPositionUpdateTime();
+        lastSpeed = st.getPlaybackSpeed();
+        lastSeenAt = System.currentTimeMillis();
+        if (lastState == PlaybackState.STATE_PLAYING || lastState == PlaybackState.STATE_BUFFERING) sessionPlayFailed = false;
+        handler.removeCallbacks(expire);
+    }
+
+    /** The session stopped or went away: pin the position it had at this moment and start the 6 h clock. */
+    private void freeze() {
+        lastPosition = rememberedPosition();
+        lastState = PlaybackState.STATE_PAUSED;
+        lastSpeed = 0f;
+        lastUpdateTime = android.os.SystemClock.elapsedRealtime();
+        lastSeenAt = System.currentTimeMillis();
+        sessionPlayFailed = false;
+        handler.removeCallbacks(expire);
+        handler.postDelayed(expire, REMEMBER_MS);
+    }
+
+    /** Where the remembered item is now: the last reported position, run forward while it was playing, within its length. */
+    private long rememberedPosition() {
+        long p = lastPosition;
+        if (lastState == PlaybackState.STATE_PLAYING) {
+            p += (long) ((android.os.SystemClock.elapsedRealtime() - lastUpdateTime) * lastSpeed);
+        }
+        if (lastDuration > 0) p = Math.min(p, lastDuration);
+        return Math.max(0, p);
+    }
+
+    /** Six hours on: nothing to come back to, and no artwork or app intent kept around (the view lets go of it too). */
+    private void forget() {
+        lastPkg = lastItem = lastMediaId = lastMediaUri = null;
+        lastTitle = lastArtist = null;
+        lastArt = shownArt = null;
+        if (nowArt != null) nowArt.setImageBitmap(null);
+        lastSessionActivity = null;
+        lastPosition = lastDuration = 0;
+        handler.removeCallbacks(expire);
+    }
+
+    private void showArt() {
+        if (shownArt == lastArt) return;
+        nowArt.setImageBitmap(lastArt);
+        shownArt = lastArt;
+    }
+
+    /** The remembered card: paused at where you left off; play brings that item back (see resumeRemembered). */
+    private void showRemembered() {
+        showingRemembered = true;
+        nowTitle.setText(lastTitle != null ? lastTitle : "");
+        nowArtist.setText(lastArtist != null ? lastArtist : appLabel(lastPkg));
+        showArt();
+        nowProgress.setVisibility(lastDuration > 0 ? View.VISIBLE : View.GONE);
+        nowProgress.setState(rememberedPosition(), android.os.SystemClock.elapsedRealtime(), 0f, lastDuration, false);
+        // Never fake it: the pause icon appears only once a session reports playing again (through showNowPlaying).
+        nowButton.setImageResource(R.drawable.ic_play);
+        styleNowPlaying();
+        nowCard.animate().cancel();
+        if (nowCard.getVisibility() != View.VISIBLE || nowCard.getAlpha() < 1f) {
+            nowCard.setAlpha(1f);
+            nowCard.setTranslationY(0);
+            nowCard.setVisibility(View.VISIBLE);
+        }
+    }
+
     private void togglePlayback() {
+        if (showingRemembered) {
+            resumeRemembered();
+            return;
+        }
         if (playing == null) return;
         PlaybackState st = playing.getPlaybackState();
-        if (st != null && st.getState() == PlaybackState.STATE_PLAYING) playing.getTransportControls().pause();
+        boolean running = st != null
+                && (st.getState() == PlaybackState.STATE_PLAYING || st.getState() == PlaybackState.STATE_BUFFERING);
+        if (running) playing.getTransportControls().pause();
         else playing.getTransportControls().play();
+    }
+
+    /**
+     * Play the remembered item the most direct way its app still allows, in this order: the session itself if it
+     * quietly came back (keeps playing in the background), a deep link to the exact item where we can read its id,
+     * the session's own activity for apps whose ids we cannot read, and last the app as it would open from the dock.
+     */
+    private void resumeRemembered() {
+        if (lastPkg == null) return;
+        handler.removeCallbacks(checkResumed);
+        PlaybackState st = playing != null && lastPkg.equals(playing.getPackageName()) ? playing.getPlaybackState() : null;
+        if (!sessionPlayFailed && st != null && st.getState() != PlaybackState.STATE_PLAYING
+                && (st.getActions() & (PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE)) != 0) {
+            playing.getTransportControls().play();
+            handler.postDelayed(checkResumed, RESUME_CHECK_MS);
+            return;
+        }
+        Intent deep = resumeIntent(lastPkg, lastMediaId, lastMediaUri, rememberedPosition());
+        if (deep != null && pm.resolveActivity(deep, 0) != null) {
+            launch(deep);
+            return;
+        }
+        if (lastSessionActivity != null) {
+            try {
+                lastSessionActivity.send();
+                return;
+            } catch (PendingIntent.CanceledException gone) {
+                lastSessionActivity = null;
+            }
+        }
+        Intent back = launchIntent(lastPkg);
+        if (back != null) launch(back);
+    }
+
+    private static final String YOUTUBE = "com.google.android.youtube.tv";
+    // An 11-character YouTube video id: after a watch?v= / youtu.be/ / embed/ marker in a URL, or standing alone in
+    // anything that is not a URL. A bare token must carry a digit, capital, '-' or '_' so that an ordinary word is not
+    // taken for an id ("recommended" and "googlevideo" are 11 letters too). Checked on the JVM with the same patterns:
+    //   dQw4w9WgXcQ, yt:video:dQw4w9WgXcQ, watch?v=.., watch?feature=share&v=..&t=10, youtu.be/.., /embed/.. -> the id
+    //   recommended, PL<34-char playlist id>, spotify:track:.., https://r3---sn-abc.googlevideo.com/.. -> nothing
+    private static final Pattern YOUTUBE_URL_ID = Pattern.compile("(?:[?&]v=|youtu\\.be/|/embed/|/v/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])");
+    private static final Pattern YOUTUBE_BARE_ID = Pattern.compile("(?<![A-Za-z0-9_-])(?=[a-z]*[A-Z0-9_-])([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])");
+
+    /**
+     * A deep link to the remembered item for the apps whose ids we know how to read, or null to leave it to the
+     * session's own activity or a plain launch. Measured on the TV on 2026-10-18, neither app we care most about
+     * gives us an item id, so for both this returns null and play reopens the app:
+     *   Spotify  posts neither METADATA_KEY_MEDIA_ID nor MEDIA_URI (only display icon, duration, album-art uri,
+     *            advertisement, album, title, artist, album art) and has no session activity.
+     *   YouTube  (com.google.android.youtube.tv) posts only DURATION, an empty ALBUM and TITLE (ARTIST/ART possibly
+     *            filtered); no MEDIA_ID, no MEDIA_URI, no session activity, empty extras, null queue.
+     * The branches below are kept for apps or builds that do post such ids; their formats are UNVERIFIED:
+     *   "spotify:track:<22 chars>" style URIs are opened as is; an 11-character YouTube video id, bare or inside a
+     *   watch / youtu.be URL, is opened as https://www.youtube.com/watch?v=<id> with &t=<seconds> when a position is
+     *   known; any other https URL is opened in the same app.
+     */
+    static Intent resumeIntent(String pkg, String mediaId, String mediaUri, long positionMs) {
+        String[] keys = {mediaUri, mediaId};
+        for (String k : keys) {
+            if (k != null && k.startsWith("spotify:")) return view(pkg, k);
+        }
+        if (YOUTUBE.equals(pkg)) {
+            String id = youtubeId(mediaUri);
+            if (id == null) id = youtubeId(mediaId);
+            if (id != null) {
+                String url = "https://www.youtube.com/watch?v=" + id;
+                if (positionMs > 0) url += "&t=" + positionMs / 1000;
+                return view(pkg, url);
+            }
+        }
+        for (String k : keys) {
+            if (k != null && k.startsWith("https://")) return view(pkg, k);
+        }
+        return null;
+    }
+
+    private static Intent view(String pkg, String uri) {
+        return new Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(pkg);
+    }
+
+    private static String youtubeId(String s) {
+        if (s == null || s.isEmpty()) return null;
+        Matcher m = (s.contains("://") ? YOUTUBE_URL_ID : YOUTUBE_BARE_ID).matcher(s);
+        return m.find() ? m.group(1) : null;
     }
 
     private CharSequence appLabel(String pkg) {
