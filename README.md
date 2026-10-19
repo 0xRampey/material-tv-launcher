@@ -4,9 +4,8 @@
 
 **A buttery smooth launcher for Android TV and Google TV.**
 
-Your most-used apps, in the order you use them, and nothing else. The whole screen takes on the colors of
-whatever app you're on, in Material 3 Expressive. No ads, no recommendation rows, no internet permission, and
-about 40 MB of memory.
+Your most-used apps, in the order you use them, in colors that follow the app you're on.
+No ads, no recommendations, no internet permission, about 40 MB of memory.
 
 [![Download APK](https://img.shields.io/badge/Download-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/0xRampey/material-tv-launcher/releases/latest/download/material-tv-launcher.apk)
 
@@ -15,15 +14,19 @@ about 40 MB of memory.
 ![No internet permission](https://img.shields.io/badge/internet_permission-none-555555?style=flat-square)
 ![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)
 
-[Set as default](#set-as-default-launcher) • [Quick start](#quick-start) • [What you get](#what-you-get) • [Supported TVs](#supported-tvs) • [Questions](#questions-people-ask)
-
 </div>
 
+**Install it with your coding agent.** Turn on USB debugging on the TV ([how](#quick-start)), then paste this
+into Claude Code, Codex or any agent that can run commands:
+
+```text
+Install Material TV Launcher (https://github.com/0xRampey/material-tv-launcher) on my Android TV
+by following its Quick start. My TV's IP address is 192.168.1.50.
+```
+
+Use your TV's own IP address (Settings → Network). Rather do it yourself? See [Quick start](#quick-start).
+
 ![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
-
-It's a home screen for any Android TV or Google TV: pretty light, and looking like it belongs on a Pixel.
-
----
 
 ## Table of contents
 
