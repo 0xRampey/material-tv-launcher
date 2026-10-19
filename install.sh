@@ -43,8 +43,10 @@ fi
 S settings put secure accessibility_enabled 1
 
 S am start -n "$PKG/.HomeActivity" >/dev/null
-for _ in 1 2 3 4 5 6 7 8; do
-  if S dumpsys activity activities | grep -m1 ResumedActivity | grep -q "$PKG"; then
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  # Read the whole dump first: grep -q/-m1 closing a pipe early makes it fail under pipefail.
+  ACT="$(S dumpsys activity activities)"
+  if grep ResumedActivity <<<"$ACT" | grep "$PKG" >/dev/null; then
     echo "Done: Material TV Launcher is on screen. Press Home on the remote anytime. Undo with ./uninstall.sh $IP"
     exit 0
   fi

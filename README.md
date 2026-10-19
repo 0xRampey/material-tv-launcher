@@ -50,7 +50,7 @@ Google TV ignores any home screen that isn't its own, so a launcher needs a litt
 ## Quick start
 
 You need a computer on the same Wi-Fi as the TV, with
-[ADB](https://developer.android.com/tools/releases/platform-tools) installed.
+[ADB](https://developer.android.com/tools/releases/platform-tools) installed (`adb version` works in a terminal).
 
 **1. On the TV**
 Settings → System → About (on Android TV: Settings → Device Preferences → About) → press OK on **Android TV OS
@@ -71,7 +71,8 @@ bash install.sh 192.168.1.50
 
 **3. On the TV again**
 When the TV shows **Allow USB debugging?**, accept it; the script waits for you. It finishes with
-`Done: Material TV Launcher is on screen.` From then on, Home on the remote brings it up.
+`Done: Material TV Launcher is on screen.` (if it says it isn't on screen yet, press Home). From then on, Home
+on the remote brings it up.
 
 Changed your mind? `bash uninstall.sh 192.168.1.50` brings the TV's own home screen back.
 
