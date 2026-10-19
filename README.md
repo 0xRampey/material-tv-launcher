@@ -1,3 +1,5 @@
+<div align="center">
+
 # Material TV Launcher
 
 **A buttery smooth launcher for Android TV and Google TV.**
@@ -5,6 +7,17 @@
 Your most-used apps, in the order you use them, and nothing else. The whole screen takes on the colors of
 whatever app you're on, in Material 3 Expressive. No ads, no recommendation rows, no internet permission, and
 about 40 MB of memory.
+
+[![Download APK](https://img.shields.io/badge/Download-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/0xRampey/material-tv-launcher/releases/latest/download/material-tv-launcher.apk)
+
+![Android 12+](https://img.shields.io/badge/Android-12%2B-3DDC84?style=flat-square)
+![Android TV and Google TV](https://img.shields.io/badge/Android_TV-Google_TV-4285F4?style=flat-square)
+![No internet permission](https://img.shields.io/badge/internet_permission-none-555555?style=flat-square)
+![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)
+
+[Set as default](#set-as-default-launcher) • [Quick start](#quick-start) • [What you get](#what-you-get) • [Supported TVs](#supported-tvs) • [Questions](#questions-people-ask)
+
+</div>
 
 ![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
 
@@ -14,7 +27,7 @@ It's a home screen for any Android TV or Google TV: pretty light, and looking li
 
 ## Table of contents
 
-- [How it works](#how-it-works)
+- [Set as default launcher](#set-as-default-launcher)
 - [Quick start](#quick-start)
 - [What you get](#what-you-get)
 - [Supported TVs](#supported-tvs)
@@ -27,7 +40,7 @@ It's a home screen for any Android TV or Google TV: pretty light, and looking li
 
 ---
 
-## How it works
+## Set as default launcher
 
 Google TV ignores any home screen that isn't its own, so a launcher needs a little help:
 
@@ -47,11 +60,11 @@ build** seven times → go back → Developer options → turn on **USB debuggin
 see it). Note the TV's IP address under Settings → Network & Internet.
 
 **2. On your computer**
-Download `material-tv-launcher-<version>.apk` and `install.sh` from the [latest release](../../releases/latest)
+Download `material-tv-launcher.apk` and `install.sh` from the [latest release](../../releases/latest)
 into one folder, then run:
 
 ```bash
-bash install.sh 192.168.1.50 material-tv-launcher-<version>.apk
+bash install.sh 192.168.1.50 material-tv-launcher.apk
 ```
 
 **3. On the TV again**
@@ -98,15 +111,15 @@ It starts after the TV's idle time (`adb shell settings get system screen_off_ti
 
 ## Supported TVs
 
-Any TV running Android TV or Google TV on **Android 12 or newer**, from any brand. Not supported: Samsung (Tizen),
-LG (webOS) and Amazon Fire TV (Fire OS).
+Any TV running Android TV or Google TV on **Android 12 or newer**, from any brand. Untested: Amazon Fire TV (Fire OS,
+which is based on Android). Not supported: Samsung (Tizen) and LG (webOS).
 
 Tried it on your TV? A short report with a screenshot helps others, see [Contributing](#contributing).
 
 ## Privacy
 
 The app has **no internet permission**, so nothing it reads can leave the TV. Check it yourself:
-`aapt2 dump permissions material-tv-launcher-<version>.apk`.
+`aapt2 dump permissions material-tv-launcher.apk`.
 
 | `install.sh` switches on | Why |
 |---|---|
