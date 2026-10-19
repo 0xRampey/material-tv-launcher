@@ -6,7 +6,7 @@ Your most-used apps, in the order you use them, and nothing else. The whole scre
 whatever app you're on, in Material 3 Expressive. No ads, no recommendation rows, no internet permission, and
 about 35 MB of memory.
 
-![Material TV Launcher: a clock, three buttons, the PlayStation 5 in focus with the screen tinted PlayStation blue, Now Playing showing Redbone, and a dock of apps](docs/home.png)
+![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
 
 I made it for my own cheap Hisense TV. I wanted the lightest home screen I could get, and I wanted it to look
 like it belonged on a Pixel.
@@ -62,7 +62,7 @@ Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings
 
 ## What you get
 
-![Moving across the dock: the PlayStation 5 tile, YouTube, Spotify, Netflix, Crunchyroll and Apple TV, with the whole screen re-tinting to each app and Redbone playing in Now Playing](docs/demo.gif)
+![The PlayStation 5 in focus: a console tile named over HDMI-CEC with a green dot because it is on, and the screen re-tinted to PlayStation blue](docs/home.png)
 
 - **Your apps, by use.** The dock shows the six apps you use most, most used on the left. It reorders itself
   as your habits change. Nothing is hardcoded, so it works for anyone's TV.
@@ -84,7 +84,7 @@ Changed your mind? `bash uninstall.sh 192.168.1.50` (also in the release) brings
 **And a screensaver that follows the sun.** *Material TV Clock* draws a fresh Material You-style wallpaper
 every hour: indigo at night, peach at sunrise, sky blue at midday, orange at sunset.
 
-![The screensaver: a large clock over soft Material shapes in afternoon teal and blue](docs/screensaver.png)
+![The screensaver: a large clock, the date and the song that is playing over soft Material shapes in early-evening greens](docs/screensaver.png)
 
 <details>
 <summary><strong>Turn on the screensaver</strong></summary>
