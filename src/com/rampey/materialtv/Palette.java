@@ -1,4 +1,4 @@
-package com.rampeys.home;
+package com.rampey.materialtv;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;

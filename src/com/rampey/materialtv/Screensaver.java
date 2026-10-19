@@ -1,4 +1,4 @@
-package com.rampeys.home;
+package com.rampey.materialtv;
 
 import android.animation.ValueAnimator;
 import android.content.ComponentName;

@@ -1,4 +1,4 @@
-package com.rampeys.home;
+package com.rampey.materialtv;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Intent;

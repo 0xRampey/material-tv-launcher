@@ -101,7 +101,7 @@ every hour: indigo at night, peach at sunrise, sky blue at midday, orange at sun
 <summary><strong>Turn on the screensaver</strong></summary>
 
 ```bash
-adb shell settings put secure screensaver_components com.rampeys.home/com.rampeys.home.Screensaver
+adb shell settings put secure screensaver_components com.rampey.materialtv/com.rampey.materialtv.Screensaver
 ```
 
 Before switching, save the current one with `adb shell settings get secure screensaver_components`; to go back,
@@ -123,9 +123,9 @@ The app has **no internet permission**, so nothing it reads can leave the TV. Ch
 
 | `install.sh` switches on | Why |
 |---|---|
-| Accessibility service (*Home button*) | To catch the remote's Home button. It reads no screen content ([code](src/com/rampeys/home/HomeKeyService.java)). |
+| Accessibility service (*Home button*) | To catch the remote's Home button. It reads no screen content ([code](src/com/rampey/materialtv/HomeKeyService.java)). |
 | Usage access | To order the dock by how much you use each app. |
-| Notification access (*Now Playing*) | To see which app is playing. It reads no notifications ([code](src/com/rampeys/home/MediaListener.java)). |
+| Notification access (*Now Playing*) | To see which app is playing. It reads no notifications ([code](src/com/rampey/materialtv/MediaListener.java)). |
 
 ## Build it yourself
 
@@ -144,13 +144,13 @@ elsewhere. The code is plain Java:
 
 | File | What it is |
 |---|---|
-| [`HomeActivity.java`](src/com/rampeys/home/HomeActivity.java) | The home screen: clock, buttons, dock, Apps grid, Now Playing |
-| [`Palette.java`](src/com/rampeys/home/Palette.java) | Colors from each app's banner |
-| [`Motion.java`](src/com/rampeys/home/Motion.java) | Material 3 Expressive spring curves |
-| [`ButtonGroup.java`](src/com/rampeys/home/ButtonGroup.java) | The connected button group |
-| [`CookieDrawable.java`](src/com/rampeys/home/CookieDrawable.java) | The morphing background shape |
-| [`Screensaver.java`](src/com/rampeys/home/Screensaver.java), [`ShapeScene.java`](src/com/rampeys/home/ShapeScene.java) | The time-of-day screensaver |
-| [`HomeKeyService.java`](src/com/rampeys/home/HomeKeyService.java) | The Home-button redirect |
+| [`HomeActivity.java`](src/com/rampey/materialtv/HomeActivity.java) | The home screen: clock, buttons, dock, Apps grid, Now Playing |
+| [`Palette.java`](src/com/rampey/materialtv/Palette.java) | Colors from each app's banner |
+| [`Motion.java`](src/com/rampey/materialtv/Motion.java) | Material 3 Expressive spring curves |
+| [`ButtonGroup.java`](src/com/rampey/materialtv/ButtonGroup.java) | The connected button group |
+| [`CookieDrawable.java`](src/com/rampey/materialtv/CookieDrawable.java) | The morphing background shape |
+| [`Screensaver.java`](src/com/rampey/materialtv/Screensaver.java), [`ShapeScene.java`](src/com/rampey/materialtv/ShapeScene.java) | The time-of-day screensaver |
+| [`HomeKeyService.java`](src/com/rampey/materialtv/HomeKeyService.java) | The Home-button redirect |
 </details>
 
 ## Troubleshooting
@@ -175,7 +175,7 @@ It's a full kit for cleaning up a TV, with its own Apple TV-style launcher. This
 for weak TVs, in Material 3 Expressive. You can use this launcher on its own or alongside tv-vibehack.
 
 **How much memory does it use?**
-About 40 MB (PSS in `adb shell dumpsys meminfo com.rampeys.home`). On our test TV, Google TV's own home used
+About 40 MB (PSS in `adb shell dumpsys meminfo com.rampey.materialtv`). On our test TV, Google TV's own home used
 about 150 MB measured the same way, across its two processes. Your numbers will differ.
 
 **Does it switch my PS5 on?**

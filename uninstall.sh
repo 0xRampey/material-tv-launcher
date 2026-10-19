@@ -3,7 +3,7 @@
 #   ./uninstall.sh <tv-ip>
 set -euo pipefail
 IP="${1:?usage: ./uninstall.sh <tv-ip>}"
-PKG=com.rampeys.home
+PKG=com.rampey.materialtv
 T="$IP:5555"
 S() { adb -s "$T" shell "$@" | tr -d '\r'; }
 

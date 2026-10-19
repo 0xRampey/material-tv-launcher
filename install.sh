@@ -6,7 +6,7 @@
 set -euo pipefail
 IP="${1:?usage: ./install.sh <tv-ip> [apk]}"
 APK="${2:-$(dirname "$0")/build/home.apk}"
-PKG=com.rampeys.home
+PKG=com.rampey.materialtv
 T="$IP:5555"
 S() { adb -s "$T" shell "$@" | tr -d '\r'; }
 

@@ -1,4 +1,4 @@
-package com.rampeys.home;
+package com.rampey.materialtv;
 
 import android.animation.ArgbEvaluator;
 import android.animation.ObjectAnimator;
