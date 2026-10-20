@@ -2,7 +2,7 @@
 
 # Material TV Launcher
 
-**A buttery smooth launcher for Android TV and Google TV.**
+**A fluid launcher for Android TV and Google TV.**
 
 Your most-used apps, in the order you use them, in colors that follow the app you're on.
 No ads, no recommendations, no internet permission, about 40 MB of memory.
@@ -29,9 +29,8 @@ No ads, no recommendations, no internet permission, about 40 MB of memory.
 - **Material 3 Expressive.** Spring motion, a colored focus glow, shapes from the Material shape library that
   morph as you move, a top-bar strip, neighbors that make room, a morphing loader when an app is slow,
   and a Google Sans Flex clock whose weight follows the time of day.
-- **Buttery smooth.** Animations run on every display frame: zero janky frames at 60 Hz (`dumpsys gfxinfo`) on a
-  budget quad-core TV chip. It uses about 40 MB of memory, and nothing animates or polls while you're in another
-  app.
+- **Fluid motion.** Animations stay in sync with your TV's refresh rate. Tested on a quad-core TV chip,
+  using about 40 MB of memory. Nothing animates or polls while you're in another app.
 
 **And a screensaver that follows the sun.** *Material TV Clock* draws a fresh Material You-style wallpaper
 every hour: indigo at night, peach at sunrise, sky blue at midday, orange at sunset.
