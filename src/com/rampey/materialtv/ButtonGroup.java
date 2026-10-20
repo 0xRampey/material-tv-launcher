@@ -10,7 +10,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
-import android.view.animation.PathInterpolator;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -18,9 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Material 3 Expressive "connected button group": buttons sit edge to edge with a hairline gap, the outer corners are
- * fully round and the inner ones tight. The selected button morphs into a full pill in the accent color; the focused
- * one turns white. Corner changes animate, so selection reads as a shape change, not just a color change.
+ * Home, Apps and Settings share one tinted strip. The selected page has an accent-colored pill;
+ * the focused tab uses the inverse surface colors. Fills fade as focus and selection change.
  */
 final class ButtonGroup extends LinearLayout {
 
@@ -28,9 +26,10 @@ final class ButtonGroup extends LinearLayout {
         void onPick(int index);
     }
 
-    private static final PathInterpolator STANDARD = new PathInterpolator(0.2f, 0f, 0f, 1f);
     private final List<TextView> buttons = new ArrayList<>();
-    private final List<float[]> radii = new ArrayList<>();
+    private final List<Integer> fills = new ArrayList<>();
+    private final List<ValueAnimator> fillAnimators = new ArrayList<>();
+    private ValueAnimator stripAnimator;
     private final boolean[] selectable;
     private int selected = -1;
     private Palette palette;
@@ -40,6 +39,12 @@ final class ButtonGroup extends LinearLayout {
         this.palette = palette;
         this.selectable = selectable;
         setGravity(Gravity.CENTER_VERTICAL);
+        setClipChildren(false);
+        setClipToPadding(false);
+        strip.setCornerRadius(dp(30));
+        setBackground(strip);
+        setPadding(dp(5), dp(5), dp(5), dp(5));
+        styleStrip();
         for (int i = 0; i < labels.length; i++) {
             final int index = i;
             TextView b = new TextView(context);
@@ -63,9 +68,10 @@ final class ButtonGroup extends LinearLayout {
                 restyle(index, true);
             });
             LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-            if (i > 0) lp.setMarginStart(dp(3));
+            if (i > 0) lp.setMarginStart(dp(4));
             buttons.add(b);
-            radii.add(targetRadii(index));
+            fills.add(Color.TRANSPARENT);
+            fillAnimators.add(null);
             addView(b, lp);
             restyle(index, false);
         }
@@ -80,50 +86,88 @@ final class ButtonGroup extends LinearLayout {
 
     void setPalette(Palette p) {
         palette = p;
-        for (int i = 0; i < buttons.size(); i++) restyle(i, false);
+        if (stripAnimator != null) stripAnimator.cancel();
+        int from = strip.getColor().getDefaultColor();
+        int to = stripColor();
+        stripAnimator = ValueAnimator.ofArgb(from, to).setDuration(Motion.DEFAULT_EFFECTS_MS);
+        stripAnimator.setInterpolator(Motion.DEFAULT_EFFECTS);
+        stripAnimator.addUpdateListener(a -> strip.setColor((int) a.getAnimatedValue()));
+        stripAnimator.start();
+        for (int i = 0; i < buttons.size(); i++) restyle(i, true, true);
     }
 
-    private float[] targetRadii(int index) {
-        float full = dp(24), tight = dp(8);
-        boolean pill = index == selected && selectable[index];
-        boolean first = index == 0, last = index == buttons.size() - 1 || index == selectable.length - 1;
-        float start = pill || first ? full : tight;
-        float end = pill || last ? full : tight;
-        // top-left, top-right, bottom-right, bottom-left (each as x, y)
-        return new float[]{start, start, end, end, end, end, start, start};
+    private final GradientDrawable strip = new GradientDrawable();
+
+    private void styleStrip() {
+        strip.setColor(stripColor());
+    }
+
+    private int stripColor() {
+        return (palette.container & 0x00FFFFFF) | 0xE6000000;
     }
 
     private void restyle(int index, boolean animate) {
+        restyle(index, animate, false);
+    }
+
+    private void restyle(int index, boolean animate, boolean retint) {
+        ValueAnimator previous = fillAnimators.get(index);
+        if (previous != null) previous.cancel();
+        fillAnimators.set(index, null);
         TextView b = buttons.get(index);
         boolean focused = b.hasFocus();
         boolean on = index == selected && selectable[index];
-        int fill = focused ? palette.inverseSurface : on ? palette.primary : withAlpha(Color.WHITE, 0x1A);
-        int ink = focused ? palette.inverseOnSurface : on ? palette.onPrimary : palette.onSurface;
+        int fill = focused ? palette.inverseSurface : on ? palette.primary : Color.TRANSPARENT;
+        int ink = focused ? palette.inverseOnSurface : on ? palette.onPrimary : palette.onSurfaceVariant;
         b.setTextColor(ink);
         for (Drawable d : b.getCompoundDrawablesRelative()) if (d != null) d.setTintList(ColorStateList.valueOf(ink));
-        float[] from = radii.get(index);
-        float[] to = targetRadii(index);
-        radii.set(index, to);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(fill);
-        b.setBackground(bg);
-        if (!animate) {
-            bg.setCornerRadii(to);
+        GradientDrawable bg = b.getBackground() instanceof GradientDrawable ? (GradientDrawable) b.getBackground() : null;
+        if (bg == null) {
+            bg = new GradientDrawable();
+            bg.setCornerRadius(dp(24));
+            bg.setColor(fill);
+            b.setBackground(bg);
+            fills.set(index, fill);
             return;
         }
-        ValueAnimator a = ValueAnimator.ofFloat(0f, 1f).setDuration(Motion.FAST_SPATIAL_MS);
-        a.setInterpolator(Motion.FAST_SPATIAL);
+        int from = fills.get(index);
+        if (!animate || from == fill || !isAttachedToWindow()) {
+            bg.setColor(fill);
+            fills.set(index, fill);
+            return;
+        }
+        final GradientDrawable g = bg;
+        ValueAnimator a = ValueAnimator.ofArgb(from, fill)
+                .setDuration(retint ? Motion.DEFAULT_EFFECTS_MS : Motion.FAST_EFFECTS_MS);
+        a.setInterpolator(retint ? Motion.DEFAULT_EFFECTS : Motion.FAST_EFFECTS);
         a.addUpdateListener(an -> {
-            float t = (float) an.getAnimatedValue();
-            float[] r = new float[8];
-            for (int k = 0; k < 8; k++) r[k] = from[k] + (to[k] - from[k]) * t;
-            bg.setCornerRadii(r);
+            int color = (int) an.getAnimatedValue();
+            fills.set(index, color);
+            g.setColor(color);
         });
+        fillAnimators.set(index, a);
         a.start();
     }
 
-    private static int withAlpha(int color, int alpha) {
-        return (color & 0x00FFFFFF) | (alpha << 24);
+    void stopAnimations() {
+        if (stripAnimator != null) {
+            stripAnimator.end();
+            stripAnimator = null;
+        }
+        for (int i = 0; i < buttons.size(); i++) {
+            ValueAnimator a = fillAnimators.get(i);
+            if (a != null) a.end();
+            fillAnimators.set(i, null);
+            TextView b = buttons.get(i);
+            b.animate().cancel();
+            b.setScaleX(b.hasFocus() ? 1.05f : 1f);
+            b.setScaleY(b.hasFocus() ? 1.05f : 1f);
+        }
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        stopAnimations();
+        super.onDetachedFromWindow();
     }
 
     private int dp(float v) {
