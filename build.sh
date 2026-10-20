@@ -21,7 +21,7 @@ rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 "$BT/aapt2" compile --dir res -o "$OUT/res/compiled.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -o "$OUT/base.apk" \
   -A assets -0 ttf --java "$OUT/gen" --min-sdk-version 31 --target-sdk-version 34 \
-  --version-code "${VERSION_CODE:-1}" --version-name "${VERSION_NAME:-1.0}" "$OUT/res/compiled.zip"
+  --version-code "${VERSION_CODE:-182}" --version-name "${VERSION_NAME:-0.1.4}" "$OUT/res/compiled.zip"
 
 # JDK core classes (for lambdas) plus android.jar for the Android API; d8 desugars to the TV's level.
 if ! javac -nowarn --release 17 -cp "$JAR" -d "$OUT/classes" $(find src third_party "$OUT/gen" -name '*.java') 2> "$OUT/javac.log"; then

@@ -293,6 +293,7 @@ public class HomeActivity extends Activity {
         shape.removeCallbacks(drift);
         handler.removeCallbacks(prebuildApps);
         if (colorAnimator != null) colorAnimator.end();
+        nav.stopAnimations();
         handler.removeCallbacks(settle);
         // The media session stays watched (it only updates fields, never views) so the card remembers what played
         // while another app had the screen; it is let go in onDestroy.
@@ -1039,7 +1040,9 @@ public class HomeActivity extends Activity {
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(dp(12), dp(12), dp(14), dp(12));
         nowShape = new GradientDrawable();
-        nowShape.setCornerRadius(dp(Focus.CARD));
+        // Use the measured height so the card stays a pill when text or font scaling changes its height.
+        card.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
+                nowShape.setCornerRadius((bottom - top) / 2f));
         card.setBackground(nowShape);
         card.setVisibility(View.GONE);
 
