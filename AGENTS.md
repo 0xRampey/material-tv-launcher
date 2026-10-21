@@ -12,7 +12,9 @@ Gemini voice through OpenRouter, using the user's own key. It contains no debloa
 ## Hard rules
 
 - **Network is limited to an explicit voice request.** This preview sends audio and the documented TV context
-  through OpenRouter. No screenshots, telemetry uploads, background inference, or bundled API keys.
+  through OpenRouter. During an explicitly requested Android-use task, it also sends the selected app's
+  visible accessibility text and action results. Screen images require the separate, default-off voice setting;
+  they stay in memory and are sent only during that task. No telemetry uploads, background inference, or bundled API keys.
   Preserve the stable launcher's offline behavior outside the assistant.
 - **Nothing user-specific in code.** The dock comes from on-device usage stats and installed apps; HDMI devices come
   from HDMI-CEC names. No hardcoded app lists, TV models, IPs or names.
@@ -134,8 +136,15 @@ It starts after the TV's idle time (`adb shell settings get system screen_off_ti
 The stable release has no internet permission. This branch has `INTERNET` and `RECORD_AUDIO` for Gemini voice.
 Pressing the mic or Ask records a turn and sends the WAV plus TV context through OpenRouter. Context includes
 installed apps, most-used app ranking, foreground app, media title/artist and playback state, HDMI inputs,
-volume, local time, and the last four voice exchanges held in memory. Screen capture and Android assist-data
-requests are disabled. The assistant log contains timing, token/cost, action metadata and errors, not audio or
+volume, local time, and the last four voice exchanges held in memory. Android assist-data requests are disabled.
+Android-use requests additionally read the selected installed app's accessibility tree,
+compact it using the MIT Android Use components, and send visible text plus action results through OpenRouter.
+Reads are on demand; events are not retained. Password fields and their descendants are omitted from targets.
+The default-off **Share screen images for Android use** voice setting allows per-step screen images when
+text controls are insufficient. Images include what is visible on the display, including private app content;
+they are resized to at most 1280 pixels wide, sent to Gemini in memory, and never written to disk. Protected
+screens or unsupported TV touch gestures may prevent visual control. Text redaction cannot redact image pixels.
+The assistant log contains timing, token/cost, action metadata and errors, not audio or
 transcripts. The key lives in the app's external files directory; keep USB debugging access trusted.
 
 Inspect permissions with `aapt2 dump permissions build/material-tv-launcher.apk`.
@@ -146,6 +155,7 @@ Inspect permissions with `aapt2 dump permissions build/material-tv-launcher.apk`
 | Usage access | To order the dock by how much you use each app. |
 | Notification access (*Now Playing*) | To see which app is playing. It reads no notifications ([code](src/com/rampey/materialtv/MediaListener.java)). |
 | Microphone and assistant role (`install-voice.sh`) | To receive the remote mic and capture one request over the current app. |
+| Accessibility service (*Android use*, opt-in) | To read screen text and navigate the selected app during an explicit assistant task. |
 
 ## Gemini voice preview
 
@@ -169,7 +179,11 @@ The key file contains only your key. Do not commit it or paste it into logs. On 
 argument to retain the key already on the TV. The script installs the APK, grants the existing Home/Now Playing
 permissions, grants microphone access and selects this app as the assistant. Press Home, then the remote mic
 or Ask. From another app the assistant stays over that app; a command can then open a different app.
-No screen context or always-listening wake word is implemented. Spotify deep links open search; actual playback
+Android use is enabled separately in Accessibility → Android use. A navigation turn is bounded to 12 model steps
+and 75 seconds; it observes the screen again before each accessibility action, rejects stale or ambiguous text
+targets, and checks the result after acting. Optional image actions check the app window and image age before
+dispatching a bounded touch gesture; they do not prove the pixels stayed unchanged during inference.
+Back/Home or dismissal cancels remaining actions. There is no always-listening wake word. Spotify deep links open search; actual playback
 depends on Spotify, so do not claim a successful search guarantees that a song started.
 
 `uninstall.sh` removes the app; if the TV does not restore its previous assistant automatically, select it again
@@ -180,10 +194,17 @@ in the TV's assistant settings. Record that setting before trying the preview on
 ```bash
 python3 scripts/prepare-voice.py --check
 bash tests/voice/run.sh
+bash tests/android-use/run.sh  # JUnit 4.13.2 + Hamcrest 1.3, from JUNIT_CP or a local Gradle cache
 ./build.sh
 ```
 
 The Java regressions cover audio-focus cancellation, capture trimming and capture/decoder queue behavior.
+The Android Use regressions exercise the vendored semantic compiler and label resolver. The optional
+`tests/android-use/device/` instrumentation runner checks cancellation, stale-screen rejection and one-shot
+timeout completion on the TV. Build/sign it separately with the same key as the launcher and remove it after
+testing; instrumentation exits stop the target process, so rebind the existing accessibility services afterward.
+Image-based navigation and physical mic behavior still require a real user trial; compilation and text-only
+guard checks do not establish that a particular TV accepts touch gestures or that playback succeeded.
 They do not prove physical remote-mic pairing or cloud accuracy. On a TV, check Home, a mic command from Home,
 a command from inside an app, and cancellation with Back/Home. Audio tests send data through OpenRouter;
 use only recordings the user authorized for that purpose. Keep APK/signature and TV install evidence outside
@@ -257,6 +278,9 @@ Apache 2.0, see [`LICENSE`](LICENSE). Bundled:
 "Google Sans" and "Material Design" belong to Google; this project is not affiliated with or endorsed by Google.
 The voice capture runtime and detector notices are documented in `third_party/sherpa-onnx/README.md` and bundled
 under `assets/licenses/`.
+The MIT-licensed Android Use semantic compiler and target resolver are pinned and documented in
+`third_party/android-use/README.md`; its host/ADB bridge and companion app are not shipped. The optional test APK
+under `tests/android-use/device/` is developer-only and is not needed for normal use.
 
 ## Pull request reports
 

@@ -67,7 +67,10 @@ Tried it on your TV? A short report with a screenshot helps others, see [Contrib
 
 The stable launcher has no internet permission. **This Gemini preview does:** a voice request sends recorded
 audio, installed app names, app-use ranking, foreground app, Now Playing metadata, HDMI inputs, volume, time,
-and up to four recent voice exchanges to Gemini through OpenRouter. No screenshots are sent.
+and up to four recent voice exchanges to Gemini through OpenRouter. If you enable Android use, app-navigation
+requests also share the selected app's visible screen text so Gemini can navigate and check the result.
+Screen images are off by default. If you enable them in voice settings, Android use can also send images of
+the current screen during that request; they are not saved.
 Your key stays on your TV and pays for the requests. Voice needs an internet connection; Home still works offline.
 
 See [permissions and verification](AGENTS.md#privacy).

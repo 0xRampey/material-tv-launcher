@@ -26,6 +26,7 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.CheckBox;
 
 import com.rampey.voice.Heard;
 import com.rampey.voice.Utterance;
@@ -51,6 +52,7 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
     private Voice<JSONObject, VoiceAgent.Result> loop;
     private VoiceAgent agent;
     private VoiceActions actions;
+    private AndroidUseTurn androidUse;
     private VoiceOrb orb;
     private TextView status, controls;
     private LinearLayout column, settings;
@@ -66,6 +68,14 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
     /** HomeKeyService consumes Home itself, so the system may not send onCloseSystemDialogs. */
     static void dismissActive() {
         if (visibleSession != null) visibleSession.dismiss();
+    }
+    static boolean usingAndroid() { return visibleSession != null && visibleSession.androidUse != null; }
+    static void cancelAndroidUse() {
+        MaterialVoiceSession session = visibleSession;
+        if (session != null && session.androidUse != null) {
+            session.androidUse.cancel();
+            session.main.post(session::dismiss);
+        }
     }
 
     @Override public void onCreate() {
@@ -164,6 +174,7 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
         final long showStarted = SystemClock.elapsedRealtime();
         super.onShow(args, flags);
         active = true;
+        getWindow().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
         firstVisibleDrawPending = true;
         visibleSession = this;
         launched = false;
@@ -175,7 +186,10 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
         final long contextStarted = SystemClock.elapsedRealtime();
         final JSONObject context = actions.context(recent);
         startupTiming("context", contextStarted);
-        try { context.put("voice_route", route); } catch (org.json.JSONException impossible) { throw new IllegalStateException(impossible); }
+        try {
+            context.put("voice_route", route);
+            context.put("android_use_available", AndroidUseService.connected() != null);
+        } catch (org.json.JSONException impossible) { throw new IllegalStateException(impossible); }
         final long paletteStarted = SystemClock.elapsedRealtime();
         styleForApp(context.optString("foreground_app"));
         startupTiming("palette", paletteStarted);
@@ -242,7 +256,8 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
                 // Voice.handle calls Act immediately after this callback. Abandon before dispatch,
                 // never after a pause/toggle or new-app action. Player callbacks are asynchronous.
                 focus.release(turn);
-                return result.error == null;
+                // Delegated turns own their own observe/act/check cycle; do not run them as a blind action list.
+                return result.error == null && !delegated(result);
             }
             @Override public void onFinished(VoiceAgent.Result result, String note, boolean acted) {
                 long finished = SystemClock.elapsedRealtime();
@@ -255,6 +270,12 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
                             : "Couldn't complete that. Please try again", 3000);
                     return;
                 }
+                if (delegated(result)) {
+                    if (result.actions.length() != 1) { message("Couldn't read that plan. Please try again", 2500); return; }
+                    startAndroidUse(turn, useCloud ? result.heard : heard.text,
+                            result.actions.optJSONObject(0).optString("package"), context);
+                    return;
+                }
                 String reply = note != null ? note : result.say.isEmpty() ? "Done" : result.say;
                 try {
                     recent.put(new JSONObject().put("said", useCloud ? result.heard : heard.text).put("did", reply));
@@ -263,6 +284,34 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
                 if (launched) dismiss(); else message(reply, 1800);
             }
         });
+    }
+
+    private static boolean delegated(VoiceAgent.Result result) {
+        for (int i = 0; i < result.actions.length(); i++) {
+            JSONObject action = result.actions.optJSONObject(i);
+            if (action != null && "android_use".equals(action.optString("type"))) return true;
+        }
+        return false;
+    }
+
+    private void startAndroidUse(int turn, String request, String pkg, JSONObject context) {
+        status.setText("Looking in the app…");
+        orb.setMode(VoiceOrb.THINKING);
+        controls.setText("Back to stop · Home to close");
+        // Let navigation affect the app underneath rather than the assistant's own window.
+        getWindow().getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        androidUse = new AndroidUseTurn(getContext(), agent, actions, request, pkg, context,
+                progress -> { if (active && turn == generation) status.setText(progress); },
+                reply -> {
+                    if (!active || turn != generation) return;
+                    androidUse = null;
+                    try {
+                        recent.put(new JSONObject().put("said", request).put("did", reply));
+                        while (recent.length() > 4) recent.remove(0);
+                    } catch (Exception ignored) { }
+                    message(reply, 2500);
+                });
+        androidUse.start();
     }
 
     private void record(long at, String route, Heard heard, VoiceAgent.Result result, boolean acted, String note,
@@ -369,12 +418,23 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
     }
     private void showSettings() {
         cancelTurn();
+        getWindow().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
         status.setText("Gemini voice preview");
         settings.removeAllViews();
-        TextView info = text("Recorded audio and TV context go to Gemini through OpenRouter using your key.\nNo screenshots are sent.\nPress the mic to speak, or Back to close.", 17, colors.onSurface);
+        TextView info = text("Audio and TV context go to Gemini through OpenRouter using your key.\nAndroid use shares app screen text. Screen images are optional.\nImages are sent only during a request and are never saved.", 17, colors.onSurface);
         info.setPadding(dp(16), dp(10), dp(16), dp(10));
         settings.addView(info, new LinearLayout.LayoutParams(-1, -2));
+        CheckBox images = new CheckBox(getContext());
+        images.setText("Share screen images for Android use");
+        images.setTextSize(17);
+        images.setTextColor(colors.onSurface);
+        images.setPadding(dp(16), dp(8), dp(16), dp(8));
+        images.setChecked(getContext().getSharedPreferences("voice", Context.MODE_PRIVATE).getBoolean("screen_images", false));
+        images.setOnCheckedChangeListener((button, enabled) -> getContext().getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .edit().putBoolean("screen_images", enabled).apply());
+        settings.addView(images, new LinearLayout.LayoutParams(-1, -2));
         settings.setVisibility(View.VISIBLE);
+        images.requestFocus();
     }
 
     @Override public boolean onKeyDown(int key, KeyEvent event) {
@@ -407,6 +467,7 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
     private void cancelTurn() {
         firstVisibleDrawPending = false;
         generation++;
+        if (androidUse != null) { androidUse.cancel(); androidUse = null; }
         settlePresentation();
         main.removeCallbacks(closeSoon);
         stopListening();
