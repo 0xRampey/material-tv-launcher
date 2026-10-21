@@ -68,12 +68,16 @@ final class AndroidUseTurn {
             if (!installedTarget()) { complete("Couldn't find that TV app"); return; }
             JSONArray history = new JSONArray();
             try (AndroidUseService.Screen initial = service.read(pkg)) {
-                if (initial.targets.isEmpty()) {
+                if (initial.window < 0) {
                     String failure = onMain(() -> actions.run(new JSONArray().put(action("open", "package", pkg))));
                     if (failure != null) { complete(failure); return; }
                     settle(900);
                 }
             }
+            int rejected = 0;
+            int unchanged = 0;
+            String priorView = null;
+            boolean priorAccepted = false;
             for (; steps < 12 && current(); steps++) {
                 try (AndroidUseService.Screen screen = service.read(pkg)) {
                     if (!current()) return;
@@ -85,6 +89,15 @@ final class AndroidUseTurn {
                                 : "This screen needs images. Enable them in voice settings";
                         break;
                     }
+                    String view = image == null ? screen.token : screen.token + ":" + image.base64.hashCode();
+                    if (priorView != null && priorAccepted) {
+                        boolean changed = !priorView.equals(view);
+                        screen.json.put("previous_action_changed_screen", changed);
+                        android.util.Log.i("MaterialTvAndroidUse", "step=" + steps + " screen_changed=" + changed);
+                        unchanged = changed ? 0 : unchanged + 1;
+                        if (unchanged >= 3) { reply = "Those controls aren't changing this screen. You can take over"; break; }
+                    }
+                    priorView = view;
                     context.put("now_playing", playback());
                     VoiceAgent.Result plan = agent.androidStep(request, context, screen.json, history,
                             image == null ? null : image.base64);
@@ -107,10 +120,15 @@ final class AndroidUseTurn {
                     if (type.equals("wait")) result = null;
                     else if (type.equals("tap") || type.equals("swipe"))
                         result = service.actImage(screen, image, action, this::current);
-                    else if (screen.targets.isEmpty() && !type.equals("back")) result = "No readable app controls; use image actions if available";
+                    else if (screen.targets.isEmpty() && !type.equals("back") && !type.equals("key")) result = "No readable controls; use remote keys when available";
                     else result = service.act(screen, action, this::current);
+                    android.util.Log.i("MaterialTvAndroidUse", "step=" + steps + " type=" + type
+                            + " accepted=" + (result == null) + (result == null ? "" : " reason=" + result));
                     history.put(new JSONObject().put("step", steps).put("action", action).put("say", plan.say)
                             .put("result", result == null ? "Action accepted; verify the next screen" : result));
+                    rejected = result == null ? 0 : rejected + 1;
+                    priorAccepted = result == null && !type.equals("wait");
+                    if (rejected >= 3) { reply = "The TV isn't accepting these controls. You can take over"; break; }
                     settle(type.equals("wait") ? 1000 : result == null ? 650 : 150);
                 }
             }

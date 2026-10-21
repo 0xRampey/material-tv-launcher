@@ -37,6 +37,10 @@
         android:theme="@style/HomeTheme">
 
         <activity
+            android:name=".TvControlActivity"
+            android:exported="true"
+            android:screenOrientation="landscape" />
+        <activity
             android:name=".HomeActivity"
             android:exported="true"
             android:launchMode="singleTask"

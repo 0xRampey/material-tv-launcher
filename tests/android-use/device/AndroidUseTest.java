@@ -24,6 +24,71 @@ public final class AndroidUseTest extends Instrumentation {
             if (service == null) throw new IllegalStateException("Android use service not bound");
             String pkg = args.getString("package", "");
             String request = args.getString("request", "");
+            if (args.getString("mode", "").equals("remote")) {
+                if (TvRemote.keyCode("up; reboot") != -1 || TvRemote.keyCode("home") != -1)
+                    throw new AssertionError("Remote key allowlist must reject arbitrary commands");
+                if (!"cancelled".equals(TvRemote.authorize(getTargetContext(), () -> false)))
+                    throw new AssertionError("Cancelled authorization must not connect");
+                runOnMainSync(() -> getTargetContext().startActivity(getTargetContext().getPackageManager()
+                        .getLeanbackLaunchIntentForPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+                Thread.sleep(2000);
+                Bundle status = new Bundle(); status.putString("progress", "Approve one-time debugging consent (Always allow unchecked)");
+                sendStatus(1, status);
+                String authorization = TvRemote.authorize(getTargetContext(), () -> true);
+                if (authorization != null) throw new IllegalStateException(authorization);
+                Thread.sleep(1200);
+                for (String key : new String[]{"left", "right"}) {
+                    String rejection = "not attempted";
+                    for (int attempt = 0; attempt < 4; attempt++) {
+                        try (AndroidUseService.Screen screen = service.read(pkg)) {
+                            JSONObject action = new JSONObject().put("type", "key").put("key", key);
+                            rejection = service.act(screen, action, () -> true);
+                            result.putString("observed_screen", screen.json.toString());
+                            result.putInt("observed_window", screen.window);
+                            try (AndroidUseService.Screen fresh = service.read(pkg)) {
+                                result.putString("fresh_screen", fresh.json.toString());
+                                result.putInt("fresh_window", fresh.window);
+                            }
+                            JSONArray windows = new JSONArray();
+                            for (android.view.accessibility.AccessibilityWindowInfo window : service.getWindows()) {
+                                android.view.accessibility.AccessibilityNodeInfo root = window.getRoot();
+                                if (root != null) {
+                                    windows.put(new JSONObject().put("package", String.valueOf(root.getPackageName()))
+                                            .put("visible", root.isVisibleToUser()).put("type", window.getType())
+                                            .put("active", window.isActive()).put("focused", window.isFocused()));
+                                    root.recycle();
+                                }
+                                window.recycle();
+                            }
+                            result.putString("windows", windows.toString());
+                        }
+                        if (rejection == null || !rejection.contains("changed")) break;
+                        Thread.sleep(500);
+                    }
+                    if (rejection != null) throw new IllegalStateException("Native " + key + " failed: " + rejection);
+                    result.putString("remote_" + key, "TV confirmed key execution");
+                    Thread.sleep(650);
+                }
+                result.putString("remote_checks", "cancelled consent, allowlist, native LEFT and RIGHT passed");
+            }
+            if (args.getString("mode", "").equals("capabilities")) {
+                JSONArray system = new JSONArray();
+                for (android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction a : service.getSystemActions())
+                    system.put(new JSONObject().put("id", a.getId()).put("label", String.valueOf(a.getLabel())));
+                result.putString("system_actions", system.toString());
+                try (AndroidUseService.Screen screen = service.read(pkg)) {
+                    result.putString("screen", screen.json.toString());
+                    AndroidUseImage image = AndroidUseImage.capture(service, () -> true);
+                    result.putBoolean("screenshot", image != null);
+                    // Tap the neutral title area, not a setting or user content.
+                    JSONObject tap = new JSONObject().put("type", "tap").put("x", 700).put("y", 100);
+                    long at = SystemClock.elapsedRealtime();
+                    result.putString("touch_result", String.valueOf(service.actImage(screen, image, tap, () -> true)));
+                    result.putLong("touch_ms", SystemClock.elapsedRealtime() - at);
+                }
+                finish(-1, result);
+                return;
+            }
             try (AndroidUseService.Screen screen = service.read(pkg)) {
                 result.putString("before", screen.json.toString());
                 result.putInt("test_nodes", screen.nodes.size());

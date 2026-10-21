@@ -424,7 +424,7 @@ public class HomeActivity extends Activity {
                     else if (index == 2) {
                         if (!AssistService.showAssistant()) android.widget.Toast.makeText(this,
                                 "Set Material TV Launcher as your assistant using install-voice.sh", android.widget.Toast.LENGTH_LONG).show();
-                    } else launch(new Intent(Settings.ACTION_SETTINGS));
+                    } else launch(new Intent(this, TvControlActivity.class));
                 });
         nav.select(0);
         bar.addView(nav, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.TOP));

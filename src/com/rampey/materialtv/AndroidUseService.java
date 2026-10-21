@@ -131,6 +131,8 @@ public final class AndroidUseService extends AccessibilityService {
             }
             JSONArray rows = new JSONArray();
             StringBuilder signature = new StringBuilder(screen.pkg).append('|').append(screen.window);
+            // TV focus can move without changing any label; include even unlabelled focus nodes.
+            for (Node node : screen.nodes) if (node.info.isFocused()) signature.append("|focus:").append(node.key);
             int chars = 0;
             for (SemanticCompiler.Row row : SemanticCompiler.compile(items)) {
                 String id = "n" + row.source;
@@ -161,6 +163,8 @@ public final class AndroidUseService extends AccessibilityService {
             put(screen.json, "screen_token", screen.token);
             put(screen.json, "rows", rows);
             put(screen.json, "truncated", screen.truncated);
+            put(screen.json, "remote_keys", TvRemote.enabled(this));
+            put(screen.json, "touch_gestures", getPackageManager().hasSystemFeature("android.hardware.touchscreen"));
             return screen;
         }
     }
@@ -195,6 +199,11 @@ public final class AndroidUseService extends AccessibilityService {
                     syntheticBackUntil = SystemClock.uptimeMillis() + 500;
                     return performGlobalAction(GLOBAL_ACTION_BACK) ? null : "Back was unavailable";
                 }
+                if (type.equals("key")) {
+                    if (!targetFocused(observed.pkg)) return "App is no longer focused; read again";
+                    return TvRemote.press(this, action.optString("key"),
+                            () -> current.getAsBoolean() && targetFocused(observed.pkg));
+                }
                 String id = action.optString("target");
                 if (id.isEmpty() && !action.optString("label").isEmpty()) {
                     List<Integer> hits = Targets.match(observed.names, action.optString("label"));
@@ -215,7 +224,12 @@ public final class AndroidUseService extends AccessibilityService {
                 if (!current.getAsBoolean()) return "cancelled";
                 switch (type) {
                     case "click":
-                        return click(target.info) ? null : "App did not accept this click";
+                        if (click(target.info)) return null;
+                        // Some TV views expose focus but no click. Focus that exact target, then use OK.
+                        if (TvRemote.enabled(this) && targetFocused(observed.pkg)
+                                && (target.info.isFocused() || target.info.performAction(AccessibilityNodeInfo.ACTION_FOCUS)))
+                            return TvRemote.press(this, "ok", () -> current.getAsBoolean() && targetFocused(observed.pkg));
+                        return "App did not accept this click; use TV remote keys if available";
                     case "focus":
                         return target.info.performAction(AccessibilityNodeInfo.ACTION_FOCUS) ? null : "App did not accept focus";
                     case "scroll": {
@@ -236,6 +250,13 @@ public final class AndroidUseService extends AccessibilityService {
                 }
             }
         }
+    }
+
+    private boolean targetFocused(String pkg) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        try { return pkg.contentEquals(root.getPackageName() == null ? "" : root.getPackageName()); }
+        finally { root.recycle(); }
     }
 
     private boolean click(AccessibilityNodeInfo node) {

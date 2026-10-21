@@ -15,7 +15,9 @@ Gemini voice through OpenRouter, using the user's own key. It contains no debloa
   through OpenRouter. During an explicitly requested Android-use task, it also sends the selected app's
   visible accessibility text and action results. Screen images require the separate, default-off voice setting;
   they stay in memory and are sent only during that task. No telemetry uploads, background inference, or bundled API keys.
-  Preserve the stable launcher's offline behavior outside the assistant.
+  An explicitly consented local-debugging session can also stay open to this TV's loopback ADB port,
+  closing after ten minutes without a control request. Only fixed arrows/OK commands are exposed; no model shell,
+  host selection, or remote computer. Preserve the stable launcher's offline behavior outside these opt-ins.
 - **Nothing user-specific in code.** The dock comes from on-device usage stats and installed apps; HDMI devices come
   from HDMI-CEC names. No hardcoded app lists, TV models, IPs or names.
 - **No brand logos we don't own.** Console tiles use Material icons on a tone of the brand hue, never a logo.
@@ -143,7 +145,8 @@ Reads are on demand; events are not retained. Password fields and their descenda
 The default-off **Share screen images for Android use** voice setting allows per-step screen images when
 text controls are insufficient. Images include what is visible on the display, including private app content;
 they are resized to at most 1280 pixels wide, sent to Gemini in memory, and never written to disk. Protected
-screens or unsupported TV touch gestures may prevent visual control. Text redaction cannot redact image pixels.
+screens or unsupported TV touch gestures may prevent visual control. On TVs without touch input, use
+accessibility targets or the optional TV remote keys instead. Text redaction cannot redact image pixels.
 The assistant log contains timing, token/cost, action metadata and errors, not audio or
 transcripts. The key lives in the app's external files directory; keep USB debugging access trusted.
 
@@ -183,6 +186,16 @@ Android use is enabled separately in Accessibility → Android use. A navigation
 and 75 seconds; it observes the screen again before each accessibility action, rejects stale or ambiguous text
 targets, and checks the result after acting. Optional image actions check the app window and image age before
 dispatching a bounded touch gesture; they do not prove the pixels stayed unchanged during inference.
+On TVs without touch, Home → Settings → Authorize TV remote control opens an explicit explanation followed
+by Android's debugging consent. This requires the TV's network-debugging endpoint on port 5555; it is an
+experimental fallback, not permission-free accessibility. A bundled BSD-licensed adblib client connects only
+to 127.0.0.1 and keeps a one-time session alive for up to ten idle minutes. Its RSA key stays in private,
+backup-excluded app storage. Disabling remote control closes it immediately. Restart/reboot or expiration
+may need consent again. Do not automatically select Always allow or silently grant persistent ADB trust.
+Gemini receives only a boolean capability and can request one allowlisted arrow/OK at a time. The app
+rechecks screen freshness, focus and cancellation, then checks the next observation for visible change.
+Three rejected actions or three identical observations after accepted actions stop the loop. Accepted keys
+still do not prove goal completion. The helper never accepts arbitrary commands or changes TV settings.
 Back/Home or dismissal cancels remaining actions. There is no always-listening wake word. Spotify deep links open search; actual playback
 depends on Spotify, so do not claim a successful search guarantees that a song started.
 
@@ -277,7 +290,8 @@ Apache 2.0, see [`LICENSE`](LICENSE). Bundled:
 [Google Sans Flex](https://github.com/googlefonts/googlesans-flex) (SIL Open Font License 1.1). "Google",
 "Google Sans" and "Material Design" belong to Google; this project is not affiliated with or endorsed by Google.
 The voice capture runtime and detector notices are documented in `third_party/sherpa-onnx/README.md` and bundled
-under `assets/licenses/`.
+under `assets/licenses/`. The loopback remote client is pinned in `third_party/adblib/README.md`
+and its BSD license is bundled under `assets/licenses/adblib.txt`.
 The MIT-licensed Android Use semantic compiler and target resolver are pinned and documented in
 `third_party/android-use/README.md`; its host/ADB bridge and companion app are not shipped. The optional test APK
 under `tests/android-use/device/` is developer-only and is not needed for normal use.
