@@ -6,19 +6,23 @@ Installation, build and troubleshooting details also live here; keep the README 
 ## What this is
 
 A buttery smooth launcher for Android TV / Google TV: the user's most-used apps, colors that follow the focused app,
-Material 3 Expressive design. It is **only a launcher**: no debloat tooling, no AI, no network.
+Material 3 Expressive design. The stable launcher has no network or AI. This experimental branch adds
+Gemini voice through OpenRouter, using the user's own key. It contains no debloat tooling.
 
 ## Hard rules
 
-- **No `INTERNET` permission.** Nothing the app reads may leave the TV.
+- **Network is limited to an explicit voice request.** This preview sends audio and the documented TV context
+  through OpenRouter. No screenshots, telemetry uploads, background inference, or bundled API keys.
+  Preserve the stable launcher's offline behavior outside the assistant.
 - **Nothing user-specific in code.** The dock comes from on-device usage stats and installed apps; HDMI devices come
   from HDMI-CEC names. No hardcoded app lists, TV models, IPs or names.
 - **No brand logos we don't own.** Console tiles use Material icons on a tone of the brand hue, never a logo.
-- **Nothing animates while another app is on screen.** Stop every loop in `onPause`; resume in `onResume`.
+- **Home stops animating while another app is on screen.** Stop its loops in `onPause`; resume in `onResume`.
+  The assistant may animate only while its window is visible; hiding it cancels capture and pending actions.
 - **Smooth on weak TVs** (4 × Cortex-A73 at 1.39 GHz, 2.4 GB RAM): animations run on display frames
   (`postOnAnimation`, time-based), cost only while Home is visible, and must keep 0 janky frames in `dumpsys gfxinfo`.
-- **Plain Java Views, no Gradle, no dependencies** beyond the vendored `material-color-utilities`. Build with
-  `./build.sh`. No Compose (too heavy for the target TVs).
+- **Plain Java Views, no Gradle.** Vendored color utilities plus the pinned capture runtime described below.
+  No local ASR or LLM weights, workers, or model downloads in this preview. No Compose.
 - **Test on a real TV** with full-resolution screenshots (`adb exec-out screencap -p`) of every focus state you touch.
 
 ## Material 3 Expressive, as used here
@@ -69,6 +73,8 @@ fill the width; Now Playing card 380 dp on the right.
 Small, one topic each, plain messages. **No `Co-Authored-By` or other AI attribution trailers.**
 
 ## Install with a coding agent
+
+The following quick start installs the stable release. For this branch, use [Gemini voice preview](#gemini-voice-preview).
 
 **Install it with your coding agent.** Turn on USB debugging on the TV ([how](#quick-start)), then paste this
 into Claude Code, Codex or any agent that can run commands:
@@ -125,25 +131,75 @@ It starts after the TV's idle time (`adb shell settings get system screen_off_ti
 
 ## Privacy
 
-The app has **no internet permission**, so nothing it reads can leave the TV. Check it yourself:
-`aapt2 dump permissions material-tv-launcher.apk` (`aapt2` comes with the Android SDK build-tools).
+The stable release has no internet permission. This branch has `INTERNET` and `RECORD_AUDIO` for Gemini voice.
+Pressing the mic or Ask records a turn and sends the WAV plus TV context through OpenRouter. Context includes
+installed apps, most-used app ranking, foreground app, media title/artist and playback state, HDMI inputs,
+volume, local time, and the last four voice exchanges held in memory. Screen capture and Android assist-data
+requests are disabled. The assistant log contains timing, token/cost, action metadata and errors, not audio or
+transcripts. The key lives in the app's external files directory; keep USB debugging access trusted.
+
+Inspect permissions with `aapt2 dump permissions build/material-tv-launcher.apk`.
 
 | `install.sh` switches on | Why |
 |---|---|
 | Accessibility service (*Home button*) | To catch the remote's Home button. It reads no screen content ([code](src/com/rampey/materialtv/HomeKeyService.java)). |
 | Usage access | To order the dock by how much you use each app. |
 | Notification access (*Now Playing*) | To see which app is playing. It reads no notifications ([code](src/com/rampey/materialtv/MediaListener.java)). |
+| Microphone and assistant role (`install-voice.sh`) | To receive the remote mic and capture one request over the current app. |
+
+## Gemini voice preview
+
+This is an unreleased branch based on v0.1.4. It retains the existing remote/TV-mic handoff, endpoint detection,
+focus handling and assistant window. `com.rampey.voice` stays an internal source package; there is no separate
+library release. The launcher calls it in capture-only mode, then sends audio to `google/gemini-3.5-flash-lite`
+through OpenRouter. Gemini does both speech recognition and action planning. The action executor validates
+installed app packages, known HDMI inputs, media commands and volume bounds before dispatching Android intents.
+Back, Home and dismissal invalidate the turn so a late reply cannot run actions.
+
+Requirements: Android 12+, a TV supporting ARMv7 apps, ADB, an OpenRouter key with credit/access to that model,
+and internet on the TV. There is no local speech recognizer, LLM, or automatic offline fallback.
+
+```bash
+python3 scripts/prepare-voice.py  # verifies/downloads the pinned native capture runtime
+./build.sh
+bash install-voice.sh 192.168.1.50 /path/outside/repo/openrouter_key
+```
+
+The key file contains only your key. Do not commit it or paste it into logs. On later updates, omit the key-file
+argument to retain the key already on the TV. The script installs the APK, grants the existing Home/Now Playing
+permissions, grants microphone access and selects this app as the assistant. Press Home, then the remote mic
+or Ask. From another app the assistant stays over that app; a command can then open a different app.
+No screen context or always-listening wake word is implemented. Spotify deep links open search; actual playback
+depends on Spotify, so do not claim a successful search guarantees that a song started.
+
+`uninstall.sh` removes the app; if the TV does not restore its previous assistant automatically, select it again
+in the TV's assistant settings. Record that setting before trying the preview on a new TV.
+
+### Preview checks
+
+```bash
+python3 scripts/prepare-voice.py --check
+bash tests/voice/run.sh
+./build.sh
+```
+
+The Java regressions cover audio-focus cancellation, capture trimming and capture/decoder queue behavior.
+They do not prove physical remote-mic pairing or cloud accuracy. On a TV, check Home, a mic command from Home,
+a command from inside an app, and cancellation with Back/Home. Audio tests send data through OpenRouter;
+use only recordings the user authorized for that purpose. Keep APK/signature and TV install evidence outside
+the repository, and distinguish scripted checks from physical remote tests.
 
 ## Build it yourself
 
 <details>
 <summary><strong>No Gradle, just the Android SDK</strong></summary>
 
-You need the Android SDK (platform 34, build-tools 34.0.0) and JDK 17.
+You need the Android SDK (platform 34, build-tools 34.0.0), JDK 17, and Python 3.9+.
 
 ```bash
+python3 scripts/prepare-voice.py # pinned capture runtime; checksum checked
 ./build.sh                    # → build/material-tv-launcher.apk, signed with your Android debug key
-./install.sh 192.168.1.50
+bash install-voice.sh 192.168.1.50 /path/outside/repo/openrouter_key
 ```
 
 Set `KEYSTORE`, `KEYSTORE_PASS` and `KEY_ALIAS` to sign with your own key, and `ANDROID_HOME` if your SDK lives
@@ -182,8 +238,9 @@ It's a full kit for cleaning up a TV, with its own Apple TV-style launcher. This
 for weak TVs, in Material 3 Expressive. You can use this launcher on its own or alongside tv-vibehack.
 
 **How much memory does it use?**
-About 40 MB (PSS in `adb shell dumpsys meminfo com.rampey.materialtv`). On our test TV, Google TV's own home used
-about 150 MB measured the same way, across its two processes. Your numbers will differ.
+The Gemini preview measured about 67 MB idle on Home (PSS in `adb shell dumpsys meminfo com.rampey.materialtv`)
+with an APK of about 13 MB. This is an idle measurement, not peak memory during recording or a request.
+The stable launcher previously measured about 40 MB. Your numbers will differ.
 
 **Does it switch my PS5 on?**
 Only when you select its tile. Switching to the input wakes the console over HDMI-CEC, same as the TV's input
@@ -198,6 +255,8 @@ Apache 2.0, see [`LICENSE`](LICENSE). Bundled:
 [material-color-utilities](https://github.com/material-foundation/material-color-utilities) (Apache 2.0) and
 [Google Sans Flex](https://github.com/googlefonts/googlesans-flex) (SIL Open Font License 1.1). "Google",
 "Google Sans" and "Material Design" belong to Google; this project is not affiliated with or endorsed by Google.
+The voice capture runtime and detector notices are documented in `third_party/sherpa-onnx/README.md` and bundled
+under `assets/licenses/`.
 
 ## Pull request reports
 

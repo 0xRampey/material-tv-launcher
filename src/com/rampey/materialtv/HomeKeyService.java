@@ -35,6 +35,7 @@ public class HomeKeyService extends AccessibilityService {
         String c = cls.toString();
         if ((GOOGLE_TV_HOME.contentEquals(pkg) && c.endsWith(".HomeActivity"))
                 || (ANDROID_TV_HOME.contentEquals(pkg) && c.endsWith(".MainActivity"))) {
+            if (SystemClock.elapsedRealtime() - HomeActivity.lastLaunchAt < 3000) return;
             openHome();
         }
     }
@@ -44,6 +45,7 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     private void openHome() {
+        MaterialVoiceSession.dismissActive();
         long now = SystemClock.elapsedRealtime();
         if (now - lastOpen < 700) return;
         lastOpen = now;

@@ -2,3 +2,7 @@ build/
 *.apk
 *.jks
 .DS_Store
+
+jni/lib/
+voice-deps/
+openrouter_key
