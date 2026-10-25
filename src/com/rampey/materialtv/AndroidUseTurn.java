@@ -2,6 +2,7 @@ package com.rampey.materialtv;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.graphics.Rect;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
@@ -33,6 +34,7 @@ final class AndroidUseTurn {
     private final Consumer<String> finished;
     private final long deadline = SystemClock.elapsedRealtime() + 75_000;
     private final boolean imagesAllowed;
+    private final Rect assistantBounds;
     private double cost;
     private int tokensIn, tokensOut, steps;
     private final Runnable timeout = this::timeOut;
@@ -45,6 +47,11 @@ final class AndroidUseTurn {
 
     AndroidUseTurn(Context app, VoiceAgent agent, VoiceActions actions, String request, String pkg, JSONObject context,
                    Consumer<String> progress, Consumer<String> finished) {
+        this(app, agent, actions, request, pkg, context, progress, finished, null);
+    }
+
+    AndroidUseTurn(Context app, VoiceAgent agent, VoiceActions actions, String request, String pkg, JSONObject context,
+                   Consumer<String> progress, Consumer<String> finished, Rect assistantBounds) {
         this.app = app;
         this.agent = agent;
         this.actions = actions;
@@ -53,6 +60,7 @@ final class AndroidUseTurn {
         this.context = context;
         this.progress = progress;
         this.finished = finished;
+        this.assistantBounds = assistantBounds == null ? null : new Rect(assistantBounds);
         imagesAllowed = app.getSharedPreferences("voice", Context.MODE_PRIVATE).getBoolean("screen_images", false);
     }
 
@@ -71,25 +79,24 @@ final class AndroidUseTurn {
                 if (initial.window < 0) {
                     String failure = onMain(() -> actions.run(new JSONArray().put(action("open", "package", pkg))));
                     if (failure != null) { complete(failure); return; }
-                    settle(900);
                 }
             }
             int rejected = 0;
             int unchanged = 0;
+            int malformed = 0;
             String priorView = null;
             boolean priorAccepted = false;
             for (; steps < 12 && current(); steps++) {
-                try (AndroidUseService.Screen screen = service.read(pkg)) {
+                try (AndroidUseService.Screen screen = awaitAppWindow(service)) {
                     if (!current()) return;
-                    if (screen.window < 0 && steps < 2) { settle(750); continue; }
                     if (screen.window < 0) { reply = "Couldn't read the app window. You can take over"; break; }
-                    AndroidUseImage image = imagesAllowed ? AndroidUseImage.capture(service, this::current) : null;
+                    AndroidUseImage image = imagesAllowed ? AndroidUseImage.capture(service, this::current, assistantBounds) : null;
                     if (screen.targets.isEmpty() && image == null) {
                         reply = imagesAllowed ? "Couldn't read this screen. You can take over"
                                 : "This screen needs images. Enable them in voice settings";
                         break;
                     }
-                    String view = image == null ? screen.token : screen.token + ":" + image.base64.hashCode();
+                    String view = image == null ? screen.token : screen.token + ":" + image.progressToken;
                     if (priorView != null && priorAccepted) {
                         boolean changed = !priorView.equals(view);
                         screen.json.put("previous_action_changed_screen", changed);
@@ -105,12 +112,23 @@ final class AndroidUseTurn {
                     tokensIn += plan.tokensIn;
                     tokensOut += plan.tokensOut;
                     if (!current()) return;
-                    if (plan.error != null) { reply = "Couldn't reach Gemini. You can take over"; break; }
-                    if (plan.actions.length() != 1) { reply = "Couldn't read the next step. Please try again"; break; }
+                    boolean unreadable = plan.error != null && plan.error.startsWith("JSON");
+                    if (plan.error != null && !unreadable) { reply = "Couldn't reach Gemini. You can take over"; break; }
+                    if (unreadable || plan.actions.length() != 1 || plan.actions.optJSONObject(0) == null) {
+                        android.util.Log.w("MaterialTvAndroidUse", "invalid_plan step=" + steps + " action_count=" + plan.actions.length());
+                        if (++malformed > 1) { reply = "Couldn't read the next step. Please try again"; break; }
+                        history.put(new JSONObject().put("step", steps).put("result",
+                                "Invalid response: return exactly ONE action object, including done or stop. No action was executed."));
+                        priorAccepted = false;
+                        continue;
+                    }
+                    malformed = 0;
                     JSONObject action = plan.actions.optJSONObject(0);
                     if (action == null) break;
                     String type = action.optString("type");
-                    android.util.Log.i("MaterialTvAndroidUse", "step=" + steps + " type=" + type + " model_ms=" + plan.millis);
+                    int remoteCode = type.equals("key") ? TvRemote.keyCode(action.optString("key")) : -1;
+                    android.util.Log.i("MaterialTvAndroidUse", "step=" + steps + " type=" + type
+                            + (remoteCode < 0 ? "" : " key_code=" + remoteCode) + " model_ms=" + plan.millis);
                     if (type.equals("done") || type.equals("stop")) {
                         reply = plan.say.isEmpty() ? "Done" : plan.say;
                         break;
@@ -140,6 +158,31 @@ final class AndroidUseTurn {
                     + " tokens_in=" + tokensIn + " tokens_out=" + tokensOut + " cost=" + cost);
         }
         complete(reply);
+    }
+
+    /** App launches and window transitions do not consume model/action steps. */
+    private AndroidUseService.Screen awaitAppWindow(AndroidUseService service) throws InterruptedException {
+        long started = SystemClock.elapsedRealtime();
+        long until = Math.min(deadline, started + 6_000);
+        AndroidUseService.Screen screen = service.read(pkg);
+        try {
+            while (screen.window < 0 && current() && SystemClock.elapsedRealtime() < until) {
+                settle(250);
+                if (!current()) break;
+                screen.close();
+                screen = null;
+                screen = service.read(pkg);
+            }
+            if (screen.window < 0) android.util.Log.w("MaterialTvAndroidUse", "window_unavailable step=" + steps
+                    + " waited_ms=" + (SystemClock.elapsedRealtime() - started)
+                    + " reason=" + screen.json.optString("window_diagnostic", "unknown")
+                    + " application_windows=" + screen.json.optInt("application_windows")
+                    + " readable_roots=" + screen.json.optInt("readable_roots"));
+            return screen;
+        } catch (Exception failure) {
+            if (screen != null) screen.close();
+            throw failure;
+        }
     }
 
     private boolean installedTarget() {

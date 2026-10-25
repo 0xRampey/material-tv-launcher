@@ -19,6 +19,7 @@ import java.nio.file.Files;
 final class VoiceAgent {
     static final String MODEL = "google/gemini-3.5-flash-lite";          // typed requests
     static final String AUDIO_MODEL = "google/gemini-3.5-flash-lite";  // spoken requests: hears and decides in one call
+    static final String NAVIGATION_MODEL = "google/gemini-3.5-flash"; // screen observation and multi-step navigation
     private static final String ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
     static final class Result {
@@ -81,8 +82,8 @@ final class VoiceAgent {
             JSONArray parts = new JSONArray().put(new JSONObject().put("type", "text").put("text", evidence.toString()));
             if (image != null) parts.put(new JSONObject().put("type", "image_url").put("image_url",
                     new JSONObject().put("url", "data:image/jpeg;base64," + image)));
-            JSONObject body = new JSONObject().put("model", MODEL).put("max_tokens", 600)
-                    .put("reasoning", new JSONObject().put("effort", "minimal"))
+            JSONObject body = new JSONObject().put("model", NAVIGATION_MODEL).put("max_tokens", 1200)
+                    .put("reasoning", new JSONObject().put("effort", "low"))
                     .put("usage", new JSONObject().put("include", true))
                     .put("response_format", new JSONObject().put("type", "json_object"))
                     .put("messages", new JSONArray()
@@ -129,6 +130,8 @@ final class VoiceAgent {
             "{\"type\":\"wait\"}, {\"type\":\"done\"}, {\"type\":\"stop\"}.",
             "When screen.remote_keys is true, use {\"type\":\"key\",\"key\":\"up|down|left|right|ok\"}.",
             "This is a TV: navigate focus with arrows and select with OK, especially in YouTube and other image-only screens.",
+            "On a nested page, moving LEFT to an on-screen back arrow only focuses it; use OK or back to leave the page.",
+            "Do not keep pressing a direction that cannot leave the current page. Track which controls you have tried.",
             "Infer the highlighted selection from the IMAGE, press ONE direction or OK, then inspect again.",
             "Never click invented ids. When rows are empty use remote keys and the image. If remote_keys is false and no usable controls exist,",
             "stop and say to authorize TV remote control in Home > Settings. Do not keep trying taps.",
@@ -309,6 +312,11 @@ final class VoiceAgent {
             "  Example: playing the last song from YouTube history needs android_use, not a public search deep link.",
             "  It reads screen text and performs clicks, then checks the result. Use it ONLY when android_use_available=true.",
             "  When choosing android_use, return it as the ONLY action. Say what you will try, not a claim of completion.",
+            "  Opening an app is only the first step of an in-app task. When the person asks to find, select, browse,",
+            "  navigate, or play specific content, use android_use if available; do not return a bare open and abandon the goal.",
+            "  For example, 'find Stranger Things on Netflix' needs android_use; 'open Netflix' only needs open.",
+            "  A search deep link opens results but does not complete a request to play an item. Use android_use to inspect",
+            "  and finish playback requests when available. Preserve the full original goal for the navigation loop.",
             "Music defaults to Spotify, videos to YouTube, unless the person names an app. Follow-ups like \"louder\", \"next\",",
             "\"the other one\" use recent_asks. If it's a question with no action, answer in say (max 80 chars), no actions.",
             "If you can't do it, say so in say with no actions. Never invent packages or input ids.",

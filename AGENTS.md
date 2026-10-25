@@ -165,7 +165,9 @@ Inspect permissions with `aapt2 dump permissions build/material-tv-launcher.apk`
 This is an unreleased branch based on v0.1.4. It retains the existing remote/TV-mic handoff, endpoint detection,
 focus handling and assistant window. `com.rampey.voice` stays an internal source package; there is no separate
 library release. The launcher calls it in capture-only mode, then sends audio to `google/gemini-3.5-flash-lite`
-through OpenRouter. Gemini does both speech recognition and action planning. The action executor validates
+through OpenRouter. Gemini does both speech recognition and initial action planning. The screen-navigation loop
+uses `google/gemini-3.5-flash` with low reasoning effort; it is slower and costs more per step than the audio route.
+The action executor validates
 installed app packages, known HDMI inputs, media commands and volume bounds before dispatching Android intents.
 Back, Home and dismissal invalidate the turn so a late reply cannot run actions.
 
@@ -195,7 +197,10 @@ may need consent again. Do not automatically select Always allow or silently gra
 Gemini receives only a boolean capability and can request one allowlisted arrow/OK at a time. The app
 rechecks screen freshness, focus and cancellation, then checks the next observation for visible change.
 Three rejected actions or three identical observations after accepted actions stop the loop. Accepted keys
-still do not prove goal completion. The helper never accepts arbitrary commands or changes TV settings.
+still do not prove goal completion. Image progress checks exclude the assistant's orb/status region and compare
+coarse app pixels, so assistant animation alone cannot count as progress. These checks still do not establish
+that the requested task completed. An invalid step reply is retried once against a fresh observation. App-window
+transitions wait up to six seconds within the overall task deadline. The helper never accepts arbitrary commands or changes TV settings.
 Back/Home or dismissal cancels remaining actions. There is no always-listening wake word. Spotify deep links open search; actual playback
 depends on Spotify, so do not claim a successful search guarantees that a song started.
 

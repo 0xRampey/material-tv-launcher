@@ -18,12 +18,118 @@ public final class AndroidUseTest extends Instrumentation {
     @Override public void onStart() {
         Bundle result = new Bundle();
         try {
-            long until = SystemClock.elapsedRealtime() + 15000;
+            android.graphics.Bitmap fixture = android.graphics.Bitmap.createBitmap(640, 360, android.graphics.Bitmap.Config.ARGB_8888);
+            try {
+                fixture.eraseColor(android.graphics.Color.BLACK);
+                android.graphics.Rect assistant = new android.graphics.Rect(200, 200, 440, 360);
+                String initialPixels = AndroidUseImage.progressToken(fixture, 640, 360, assistant);
+                android.graphics.Canvas canvas = new android.graphics.Canvas(fixture);
+                android.graphics.Paint paint = new android.graphics.Paint(); paint.setColor(android.graphics.Color.WHITE);
+                canvas.drawRect(assistant, paint);
+                if (!initialPixels.equals(AndroidUseImage.progressToken(fixture, 640, 360, assistant)))
+                    throw new AssertionError("Assistant animation must not count as app progress");
+                canvas.drawRect(0, 0, 100, 100, paint);
+                if (initialPixels.equals(AndroidUseImage.progressToken(fixture, 640, 360, assistant)))
+                    throw new AssertionError("App changes outside assistant must count as progress");
+                if (AndroidUseImage.progressToken(fixture, 640, 360, null).equals(initialPixels))
+                    throw new AssertionError("Without an overlay the full app image must be compared");
+                result.putString("image_progress_checks", "Assistant pixels excluded; app pixels detected; full-screen mode checked");
+            } finally { fixture.recycle(); }
+            Bundle starting = new Bundle(); starting.putInt("test_pid", android.os.Process.myPid());
+            sendStatus(1, starting);
+            long until = SystemClock.elapsedRealtime() + 30000;
             while (AndroidUseService.connected() == null && SystemClock.elapsedRealtime() < until) Thread.sleep(100);
             AndroidUseService service = AndroidUseService.connected();
             if (service == null) throw new IllegalStateException("Android use service not bound");
             String pkg = args.getString("package", "");
             String request = args.getString("request", "");
+            if (args.getString("mode", "").equals("overlay")) {
+                runOnMainSync(() -> {
+                    Intent launch = args.getString("from_home", "").equals("true")
+                            ? new Intent(getTargetContext(), HomeActivity.class)
+                            : getTargetContext().getPackageManager().getLeanbackLaunchIntentForPackage(args.getString("start_package", pkg));
+                    getTargetContext().startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                });
+                Thread.sleep(2000);
+                if (args.getString("authorize", "").equals("true")) {
+                    Bundle status = new Bundle(); status.putString("progress", "Approve one-time remote consent; Always allow unchecked");
+                    sendStatus(1, status);
+                    String error = TvRemote.authorize(getTargetContext(), () -> true);
+                    if (error != null) throw new IllegalStateException(error);
+                }
+                java.lang.reflect.Field visible = MaterialVoiceSession.class.getDeclaredField("visibleSession");
+                visible.setAccessible(true);
+                java.lang.reflect.Method settings = MaterialVoiceSession.class.getDeclaredMethod("showSettings");
+                settings.setAccessible(true);
+                java.lang.reflect.Field generation = MaterialVoiceSession.class.getDeclaredField("generation");
+                generation.setAccessible(true);
+                java.lang.reflect.Field activeTurn = MaterialVoiceSession.class.getDeclaredField("androidUse");
+                activeTurn.setAccessible(true);
+                java.lang.reflect.Field statusText = MaterialVoiceSession.class.getDeclaredField("status");
+                statusText.setAccessible(true);
+                java.lang.reflect.Method startTurn = MaterialVoiceSession.class.getDeclaredMethod("startAndroidUse",
+                        int.class, String.class, String.class, JSONObject.class);
+                startTurn.setAccessible(true);
+                boolean[] shown = {false};
+                long readyUntil = SystemClock.elapsedRealtime() + 15000;
+                while (!shown[0] && SystemClock.elapsedRealtime() < readyUntil) {
+                    runOnMainSync(() -> shown[0] = AssistService.showAssistant());
+                    if (!shown[0]) Thread.sleep(100);
+                }
+                if (!shown[0]) throw new IllegalStateException("Assistant not ready");
+                MaterialVoiceSession[] session = {null};
+                long showUntil = SystemClock.elapsedRealtime() + 5000;
+                while (session[0] == null && SystemClock.elapsedRealtime() < showUntil) {
+                    runOnMainSync(() -> {
+                        try {
+                            session[0] = (MaterialVoiceSession) visible.get(null);
+                            // Stop capture before any audio request; the explicit test uses text below.
+                            if (session[0] != null) settings.invoke(session[0]);
+                        } catch (Exception e) { throw new RuntimeException(e); }
+                    });
+                    if (session[0] == null) Thread.sleep(25);
+                }
+                if (session[0] == null) throw new IllegalStateException("Assistant window did not appear");
+                VoiceActions plannerActions = new VoiceActions(getTargetContext(), intent -> { });
+                JSONObject[] taskContext = {null};
+                runOnMainSync(() -> taskContext[0] = plannerActions.context(new JSONArray()));
+                taskContext[0].put("android_use_available", true);
+                VoiceAgent.Result plan = new VoiceAgent(new File(getTargetContext().getExternalFilesDir(null), "openrouter_key"))
+                        .ask(request, taskContext[0]);
+                result.putString("plan_actions", plan.actions.toString());
+                if (plan.error != null || plan.actions.length() != 1
+                        || !"android_use".equals(plan.actions.getJSONObject(0).optString("type"))
+                        || !pkg.equals(plan.actions.getJSONObject(0).optString("package")))
+                    throw new IllegalStateException("Request did not route to the expected Android use app");
+                runOnMainSync(() -> {
+                    try {
+                        java.lang.reflect.Field panel = MaterialVoiceSession.class.getDeclaredField("settings");
+                        panel.setAccessible(true);
+                        ((android.view.View) panel.get(session[0])).setVisibility(android.view.View.GONE);
+                        startTurn.invoke(session[0], generation.getInt(session[0]), request, pkg, taskContext[0]);
+                    } catch (Exception e) { throw new RuntimeException(e); }
+                });
+                boolean[] running = {true};
+                long loopUntil = SystemClock.elapsedRealtime() + 85_000;
+                while (running[0] && SystemClock.elapsedRealtime() < loopUntil) {
+                    Thread.sleep(100);
+                    runOnMainSync(() -> {
+                        try {
+                            running[0] = activeTurn.get(session[0]) != null;
+                            result.putString("reply", ((android.widget.TextView) statusText.get(session[0])).getText().toString());
+                        } catch (Exception e) { throw new RuntimeException(e); }
+                    });
+                }
+                if (running[0]) throw new IllegalStateException("Overlay turn did not finish");
+                try (AndroidUseService.Screen screen = service.read(pkg)) {
+                    result.putString("after", screen.json.toString());
+                    result.putInt("after_window", screen.window);
+                }
+                result.putString("overlay_check", "Actual assistant window and production AndroidUseTurn used; synthetic text, not physical microphone");
+                runOnMainSync(MaterialVoiceSession::dismissActive);
+                finish(-1, result);
+                return;
+            }
             if (args.getString("mode", "").equals("remote")) {
                 if (TvRemote.keyCode("up; reboot") != -1 || TvRemote.keyCode("home") != -1)
                     throw new AssertionError("Remote key allowlist must reject arbitrary commands");

@@ -94,12 +94,16 @@ public final class AndroidUseService extends AccessibilityService {
             AccessibilityNodeInfo root = null;
             int best = Integer.MIN_VALUE;
             List<AccessibilityWindowInfo> windows = getWindows();
+            int applicationWindows = 0, readableRoots = 0, matchingRoots = 0;
             for (AccessibilityWindowInfo window : windows) {
                 try {
                     if (window.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                    applicationWindows++;
                     AccessibilityNodeInfo candidate = window.getRoot();
                     if (candidate == null) continue;
+                    readableRoots++;
                     String pkg = text(candidate.getPackageName());
+                    if (wantedPackage.equals(pkg)) matchingRoots++;
                     if (getPackageName().equals(pkg) || !candidate.isVisibleToUser()
                             || (!wantedPackage.isEmpty() && !wantedPackage.equals(pkg))) {
                         candidate.recycle();
@@ -113,7 +117,16 @@ public final class AndroidUseService extends AccessibilityService {
                     } else candidate.recycle();
                 } finally { window.recycle(); }
             }
-            if (root == null) return empty(wantedPackage, "App screen is unavailable");
+            if (root == null) {
+                Screen unavailable = empty(wantedPackage, "App screen is unavailable");
+                // Counts only: never log screen text or unrelated app names.
+                put(unavailable.json, "window_diagnostic", applicationWindows == 0 ? "no_application_windows"
+                        : readableRoots == 0 ? "roots_unavailable"
+                        : matchingRoots == 0 ? "target_window_missing" : "target_window_not_visible");
+                put(unavailable.json, "application_windows", applicationWindows);
+                put(unavailable.json, "readable_roots", readableRoots);
+                return unavailable;
+            }
             Screen screen = new Screen(text(root.getPackageName()), root.getWindowId());
             long deadline = SystemClock.uptimeMillis() + 1800;
             visit(screen, root, -1, 0, false, deadline);

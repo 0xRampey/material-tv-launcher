@@ -300,6 +300,12 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
         controls.setText("Back to stop · Home to close");
         // Let navigation affect the app underneath rather than the assistant's own window.
         getWindow().getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        android.graphics.Rect assistantBounds = new android.graphics.Rect();
+        column.getGlobalVisibleRect(assistantBounds);
+        // Status can wrap while working. Cover its maximum footprint, including the orb, for progress checks only.
+        assistantBounds.top = Math.min(assistantBounds.top, getContext().getResources().getDisplayMetrics().heightPixels - dp(248));
+        assistantBounds.bottom = getContext().getResources().getDisplayMetrics().heightPixels;
+        assistantBounds.inset(-dp(16), 0);
         androidUse = new AndroidUseTurn(getContext(), agent, actions, request, pkg, context,
                 progress -> { if (active && turn == generation) status.setText(progress); },
                 reply -> {
@@ -310,7 +316,7 @@ final class MaterialVoiceSession extends VoiceInteractionSession {
                         while (recent.length() > 4) recent.remove(0);
                     } catch (Exception ignored) { }
                     message(reply, 2500);
-                });
+                }, assistantBounds);
         androidUse.start();
     }
 
