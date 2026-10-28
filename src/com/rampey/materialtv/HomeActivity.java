@@ -65,9 +65,16 @@ import java.util.regex.Pattern;
 
 /**
  * A Material 3 Expressive home screen for TV: the background and accents take their color from the app in focus,
- * one dock of your most-used apps, everything else on an Apps page. No network, no tracking.
+ * one dock of your most-used apps, everything else on an Apps page. Voice requests use Gemini through OpenRouter.
  */
 public class HomeActivity extends Activity {
+    private static java.lang.ref.WeakReference<HomeActivity> liveHome = new java.lang.ref.WeakReference<>(null);
+    static volatile long lastLaunchAt;
+    static Palette voicePalette() {
+        HomeActivity home = liveHome.get();
+        return home == null ? null : home.palette;
+    }
+
 
     private static final int SIDE = 48, DOCK_PAD = 8, SCROLL_PAD = 18, GAP = 14, RING = 6, APP_MARGIN = 9;
 
@@ -259,12 +266,14 @@ public class HomeActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        liveHome = new java.lang.ref.WeakReference<>(this);
         pm = getPackageManager();
         setContentView(buildRoot());
     }
 
     @Override protected void onResume() {
         super.onResume();
+        if (pendingResume != null) { pendingResume.cancel(); pendingResume = null; }
         fillDock();
         if (showingApps) fillApps();
         handler.removeCallbacks(tick);
@@ -305,6 +314,8 @@ public class HomeActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (pendingResume != null) pendingResume.cancel();
+        if (liveHome.get() == this) liveHome.clear();
         stopNowPlaying();
         handler.removeCallbacks(expire);
         handler.removeCallbacks(checkResumed);
@@ -406,13 +417,16 @@ public class HomeActivity extends Activity {
         bar.addView(when, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.TOP));
 
         nav = new ButtonGroup(this, font(600), palette,
-                new String[]{"Home", "Apps", "Settings"},
-                new int[]{R.drawable.ic_home, R.drawable.ic_apps, R.drawable.ic_settings},
-                new boolean[]{true, true, false},
+                new String[]{"Home", "Apps", "Ask", "Settings"},
+                new int[]{R.drawable.ic_home, R.drawable.ic_apps, R.drawable.ic_ask, R.drawable.ic_settings},
+                new boolean[]{true, true, false, false},
                 index -> {
                     if (index == 0) showHome();
                     else if (index == 1) showApps();
-                    else launch(new Intent(Settings.ACTION_SETTINGS));
+                    else if (index == 2) {
+                        if (!AssistantSetup.hasKey(this) || !AssistService.showAssistant())
+                            startActivity(new Intent(this, TvControlActivity.class).putExtra("voice_setup", true));
+                    } else launch(new Intent(this, TvControlActivity.class));
                 });
         nav.select(0);
         bar.addView(nav, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.TOP));
@@ -1213,7 +1227,7 @@ public class HomeActivity extends Activity {
 
     // The last thing that played, kept after its app lets the session go (YouTube stops as soon as you leave it),
     // with whatever the app gave us to get back to it: an item id/uri or the session's own activity when it posts
-    // one (Spotify and YouTube on this TV post neither, so for them play reopens the app and the card is a reminder).
+    // one. When neither is exposed, restore the app's task and resume only its matching item and saved position.
     // The fields follow every session callback, also while another app has the screen; views are touched on Home only.
     private static final long REMEMBER_MS = 6 * 3_600_000L;
     private static final long RESUME_CHECK_MS = 1500;
@@ -1229,13 +1243,16 @@ public class HomeActivity extends Activity {
     private float lastSpeed;
     private long lastPosition, lastUpdateTime, lastDuration, lastSeenAt;
     private boolean wasActive, showingRemembered, sessionPlayFailed;
+    private MediaResume pendingResume;
     private final Runnable expire = () -> {
         forget();
         if (foreground && nowCard != null) showNowPlaying();
     };
     // play() went to a session that only said it could play: if nothing is playing after a moment, go on to the app.
     private final Runnable checkResumed = () -> {
-        if (!foreground || !showingRemembered) return;
+        if (!foreground) return;
+        PlaybackState state = playing != null ? playing.getPlaybackState() : null;
+        if (state != null && (state.getState() == PlaybackState.STATE_PLAYING || state.getState() == PlaybackState.STATE_BUFFERING)) return;
         sessionPlayFailed = true;
         resumeRemembered();
     };
@@ -1263,7 +1280,7 @@ public class HomeActivity extends Activity {
             }
             return;
         }
-        handler.removeCallbacks(checkResumed);
+        if (running) handler.removeCallbacks(checkResumed);
         nowTitle.setText(lastTitle);
         nowArtist.setText(lastArtist);
         showArt();
@@ -1387,13 +1404,14 @@ public class HomeActivity extends Activity {
         boolean running = st != null
                 && (st.getState() == PlaybackState.STATE_PLAYING || st.getState() == PlaybackState.STATE_BUFFERING);
         if (running) playing.getTransportControls().pause();
-        else playing.getTransportControls().play();
+        else resumeRemembered();
     }
 
     /**
      * Play the remembered item the most direct way its app still allows, in this order: the session itself if it
      * quietly came back (keeps playing in the background), a deep link to the exact item where we can read its id,
-     * the session's own activity for apps whose ids we cannot read, and last the app as it would open from the dock.
+     * the session's own activity for apps whose ids we cannot read, and last the existing app task with a bounded
+     * request to resume the matching title and position. Never substitute a search result for the remembered video.
      */
     private void resumeRemembered() {
         if (lastPkg == null) return;
@@ -1412,14 +1430,28 @@ public class HomeActivity extends Activity {
         }
         if (lastSessionActivity != null) {
             try {
+                prepareResume();
                 lastSessionActivity.send();
+                pendingResume.start();
                 return;
             } catch (PendingIntent.CanceledException gone) {
+                if (pendingResume != null) pendingResume.cancel();
                 lastSessionActivity = null;
             }
         }
         Intent back = launchIntent(lastPkg);
-        if (back != null) launch(back);
+        if (back != null) {
+            prepareResume();
+            // Reuse the existing task without asking the app to reset its playback screen.
+            back.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            launch(back);
+            pendingResume.start();
+        }
+    }
+
+    private void prepareResume() {
+        if (pendingResume != null) pendingResume.cancel();
+        pendingResume = new MediaResume(this, handler, lastPkg, lastTitle, rememberedPosition());
     }
 
     private static final String YOUTUBE = "com.google.android.youtube.tv";
@@ -1433,8 +1465,8 @@ public class HomeActivity extends Activity {
 
     /**
      * A deep link to the remembered item for the apps whose ids we know how to read, or null to leave it to the
-     * session's own activity or a plain launch. Measured on the TV on 2026-10-18, neither app we care most about
-     * gives us an item id, so for both this returns null and play reopens the app:
+     * session's own activity or task restoration. Measured on the TV on 2026-10-18, neither app we care most about
+     * gives us an item id, so for both this returns null:
      *   Spotify  posts neither METADATA_KEY_MEDIA_ID nor MEDIA_URI (only display icon, duration, album-art uri,
      *            advertisement, album, title, artist, album art) and has no session activity.
      *   YouTube  (com.google.android.youtube.tv) posts only DURATION, an empty ALBUM and TITLE (ARTIST/ART possibly
@@ -1530,4 +1562,36 @@ public class HomeActivity extends Activity {
     private int dp(float value) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics()));
     }
+    static void beep(boolean start) {
+        final int rate = 44100;
+        double[] notes = start ? new double[] {880.0, 1318.5} : new double[] {1318.5, 880.0};   // A5 and E6
+        float amp = start ? 0.8f : 0.55f;
+        int len = rate * 26 / 100;
+        short[] pcm = new short[len];
+        for (int k = 0; k < notes.length; k++) {
+            int from = k * rate * 8 / 100;   // second note 80 ms after the first
+            for (int i = from; i < len; i++) {
+                double t = (i - from) / (double) rate;
+                double env = Math.min(1.0, t / 0.004) * Math.exp(-t / 0.07);   // quick attack, bell-like decay
+                double w = Math.sin(2 * Math.PI * notes[k] * t) + 0.25 * Math.sin(4 * Math.PI * notes[k] * t);
+                int v = pcm[i] + (int) (w / 1.25 * env * amp * 32767 * 0.7);
+                pcm[i] = (short) Math.max(-32768, Math.min(32767, v));
+            }
+        }
+        try {
+            android.media.AudioTrack track = new android.media.AudioTrack.Builder()
+                    .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                    .setAudioFormat(new android.media.AudioFormat.Builder().setSampleRate(rate)
+                            .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                            .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
+                    .setTransferMode(android.media.AudioTrack.MODE_STATIC).setBufferSizeInBytes(len * 2).build();
+            track.write(pcm, 0, len);
+            track.play();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(track::release, 1000);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
 }

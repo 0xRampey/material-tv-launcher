@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.rampey.materialtv.intenttest">
+    <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="34" />
+    <application android:label="Voice intent integration test" />
+    <instrumentation android:name="com.rampey.materialtv.VoiceIntentTest" android:targetPackage="com.rampey.materialtv" />
+</manifest>

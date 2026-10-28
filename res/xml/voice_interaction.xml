@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher as the TV's assistant app: the remote's mic button opens the assistant window. -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.rampey.materialtv.AssistSessionService"
+    android:recognitionService="com.rampey.materialtv.AssistRecognitionService"
+    android:supportsAssist="true" />

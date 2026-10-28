@@ -12,6 +12,17 @@ if ! adb connect "$T" | grep -q "connected"; then
   exit 1
 fi
 
+# Restore the saved assistant before uninstall removes its backup. Never guess a Google component.
+ASSISTANT="$(S settings get secure voice_interaction_service)"
+if [[ "$ASSISTANT" == "$PKG/"* ]]; then
+  HERE="$(cd "$(dirname "$0")" && pwd)"
+  if [[ ! -f "$HERE/assistant.sh" || ! -f "$HERE/scripts/assistant-settings.py" ]]; then
+    echo "Restore your previous assistant in Voice assistant settings before uninstalling, or download the complete setup folder." >&2
+    exit 1
+  fi
+  bash "$HERE/assistant.sh" "$IP" restore
+fi
+
 # Home button: take only our service out of the list, keep any others.
 SVC="$PKG/$PKG.HomeKeyService"
 CUR="$(S settings get secure enabled_accessibility_services)"

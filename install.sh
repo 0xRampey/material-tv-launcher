@@ -36,8 +36,19 @@ S cmd appops set "$PKG" GET_USAGE_STATS allow
 # Added to (not replacing) any accessibility services already on.
 SVC="$PKG/$PKG.HomeKeyService"
 CUR="$(S settings get secure enabled_accessibility_services)"
-if [[ "$CUR" != *"$SVC"* ]]; then
-  if [[ -z "$CUR" || "$CUR" == "null" ]]; then NEW="$SVC"; else NEW="$CUR:$SVC"; fi
+# Android use was removed. Drop only our obsolete screen-reading service on upgrade.
+NEW=""
+IFS=: read -r -a SERVICES <<<"$CUR"
+for SERVICE in "${SERVICES[@]}"; do
+  case "$SERVICE" in
+    ""|null|"$PKG/.AndroidUseService"|"$PKG/$PKG.AndroidUseService") continue ;;
+  esac
+  if [[ -z "$NEW" ]]; then NEW="$SERVICE"; else NEW="$NEW:$SERVICE"; fi
+done
+if [[ ":$NEW:" != *":$SVC:"* && ":$NEW:" != *":$PKG/.HomeKeyService:"* ]]; then
+  if [[ -z "$NEW" ]]; then NEW="$SVC"; else NEW="$NEW:$SVC"; fi
+fi
+if [[ "$NEW" != "$CUR" ]]; then
   S settings put secure enabled_accessibility_services "$NEW"
 fi
 S settings put secure accessibility_enabled 1

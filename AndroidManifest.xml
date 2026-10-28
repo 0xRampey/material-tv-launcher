@@ -2,13 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.rampey.materialtv">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
-    <!-- No INTERNET permission: the launcher never goes online. -->
+    <!-- Gemini voice uses the network only for a requested assistant turn. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Android 11+ package visibility: only apps with a TV or phone launcher entry. -->
     <queries>
+        <intent>
+            <action android:name="android.service.voice.VoiceInteractionService" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.VOICE_INPUT_SETTINGS" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -30,8 +40,13 @@
         android:icon="@drawable/icon"
         android:banner="@drawable/banner"
         android:allowBackup="false"
+        android:extractNativeLibs="true"
         android:theme="@style/HomeTheme">
 
+        <activity
+            android:name=".TvControlActivity"
+            android:exported="true"
+            android:screenOrientation="landscape" />
         <activity
             android:name=".HomeActivity"
             android:exported="true"
@@ -88,6 +103,29 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/home_key_service" />
+        </service>
+        <!-- Gemini preview: the remote mic opens a small assistant window over the current app. -->
+        <service
+            android:name=".AssistService"
+            android:exported="true"
+            android:label="Ask"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/voice_interaction" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".AssistSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service
+            android:name=".AssistRecognitionService"
+            android:exported="true"
+            android:label="Ask">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
         </service>
     </application>
 </manifest>
