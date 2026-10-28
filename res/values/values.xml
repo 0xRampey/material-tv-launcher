@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="service_description">Opens this home screen when you press Home, instead of Google TV\'s.</string>
-    <string name="android_use_description">Lets Gemini read and navigate an app when you ask. Screen text goes through OpenRouter using your key. Screen images are optional and off by default. No background screen reading.</string>
     <color name="night">#0B1026</color>
     <style name="HomeTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@color/night</item>

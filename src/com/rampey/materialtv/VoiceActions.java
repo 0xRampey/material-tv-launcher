@@ -43,6 +43,10 @@ final class VoiceActions {
     private final Set<String> inputs = new HashSet<>();
     private MediaController media;
     private boolean wasPlaying;
+    private String acknowledgement, lastError;
+
+    String lastError() { return lastError; }
+    private String fail(String message) { lastError = message; return message; }
 
     /** The caller controls overlay dismissal and activity launching. Media and volume never launch Home. */
     VoiceActions(Context context, Consumer<Intent> launch) {
@@ -68,6 +72,8 @@ final class VoiceActions {
                 JSONObject item = new JSONObject();
                 put(item, "name", String.valueOf(info.loadLabel(pm)));
                 put(item, "package", pkg);
+                put(item, "content_play_intent", supportsContent(pkg, true));
+                put(item, "content_search_intent", supportsContent(pkg, false));
                 apps.put(item);
             }
         } catch (RuntimeException ignored) { }
@@ -204,6 +210,20 @@ final class VoiceActions {
 
     /** Run the plan against the captured context. A non-null result replaces the model's claimed success. */
     String run(JSONArray actions) {
+        acknowledgement = lastError = null;
+        // A content request owns playback in the destination app. Never resume the old captured session
+        // if a model adds a second media action after an app/search launch.
+        boolean opensApp = false, controlsMedia = false;
+        for (int i = 0; actions != null && i < actions.length(); i++) {
+            JSONObject action = actions.optJSONObject(i);
+            if (action == null) return fail("Couldn't read that TV action");
+            String type = action.optString("type");
+            if (!java.util.Set.of("open", "content", "input", "media", "volume", "settings", "home").contains(type))
+                return fail("That action isn't supported. Try an app or media command");
+            opensApp |= type.equals("open") || type.equals("content");
+            controlsMedia |= type.equals("media");
+        }
+        if (opensApp && controlsMedia) return fail("Please request playback in the app directly");
         String note = null;
         for (int i = 0; actions != null && i < actions.length(); i++) {
             JSONObject action = actions.optJSONObject(i);
@@ -215,16 +235,40 @@ final class VoiceActions {
                 note = "Couldn't complete that TV action";
             }
         }
-        return note;
+        lastError = note;
+        return note != null ? note : acknowledgement;
     }
 
     private String runOne(JSONObject action) {
         switch (action.optString("type")) {
+            case "content": {
+                String pkg = action.optString("package"), query = action.optString("query");
+                String mode = action.optString("mode");
+                if (!packages.contains(pkg)) return "Couldn't find that app";
+                if (!mode.equals("play") && !mode.equals("search")) return "Couldn't read that content request";
+                if (query.trim().isEmpty() || query.length() > 1000) return "What would you like to find?";
+                for (Intent intent : MediaIntents.candidates(pkg, query, mode.equals("play"))) {
+                    if (pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) == null) continue;
+                    try {
+                        start(intent);
+                        acknowledgement = MediaIntents.requestsPlayback(intent) ? "Playback requested in the app"
+                                : "Search opened. Select a result to play";
+                        return null;
+                    } catch (android.content.ActivityNotFoundException unavailable) { /* Try the next supported integration. */ }
+                }
+                return "That app doesn't expose a supported search or playback intent";
+            }
             case "open": {
                 String pkg = action.optString("package"), uri = action.optString("uri");
                 if (!packages.contains(pkg) || app.getPackageName().equals(pkg)) return "Couldn't find that app";
                 Intent intent;
-                if (!uri.isEmpty()) intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(pkg);
+                if (!uri.isEmpty()) {
+                    Uri link = Uri.parse(uri);
+                    if (!MediaIntents.safeLink(pkg, link)) return "That link isn't supported for this app";
+                    intent = new Intent(Intent.ACTION_VIEW, link).setPackage(pkg);
+                    if (pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) == null)
+                        return "That app can't open this link";
+                }
                 else {
                     intent = pm.getLeanbackLaunchIntentForPackage(pkg);
                     if (intent == null) intent = pm.getLaunchIntentForPackage(pkg);
@@ -284,6 +328,14 @@ final class VoiceActions {
                 return null;
             default: return "Didn't recognize that TV action";
         }
+    }
+
+    private boolean supportsContent(String pkg, boolean play) {
+        for (Intent intent : MediaIntents.candidates(pkg, "query", play)) {
+            if (play && !MediaIntents.requestsPlayback(intent)) continue;
+            if (pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) != null) return true;
+        }
+        return false;
     }
 
     private void start(Intent intent) {

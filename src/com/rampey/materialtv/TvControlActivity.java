@@ -5,49 +5,117 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
-import java.util.concurrent.atomic.AtomicBoolean;
+import android.text.InputType;
+import android.view.WindowManager;
+import android.widget.EditText;
 
 /** User-facing permission entry from Home; visiting it never authorizes control automatically. */
 public final class TvControlActivity extends Activity {
-    private final AtomicBoolean current = new AtomicBoolean(true);
+    private static final int MICROPHONE = 31, ASSISTANT = 32;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        new AlertDialog.Builder(this).setTitle("TV control")
-                .setItems(new String[]{"Android use accessibility permission",
-                        TvRemote.enabled(this) ? "Reconnect TV remote control" : "Authorize TV remote control",
-                        "Disable TV remote control", "TV settings"}, (dialog, choice) -> {
-                    if (choice == 0) { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); finish(); }
-                    else if (choice == 1) consent();
-                    else if (choice == 2) { TvRemote.disable(this); finish(); }
+        if (getIntent().getBooleanExtra("voice_setup", false)) { voiceSettings(); return; }
+        new AlertDialog.Builder(this).setTitle("Settings")
+                .setItems(new String[]{"Voice assistant", "TV settings"}, (dialog, choice) -> {
+                    if (choice == 0) voiceSettings();
                     else { startActivity(new Intent(Settings.ACTION_SETTINGS)); finish(); }
                 }).setOnCancelListener(dialog -> finish()).show();
     }
-    private void consent() {
-        new AlertDialog.Builder(this).setTitle("Allow launcher remote control?")
-                .setMessage("This lets the launcher send arrows and OK during your Android-use requests. "
-                        + "It connects only to this TV through local debugging. No computer or companion app is needed.\n\n"
-                        + "Debugging grants broad device access. Enable network debugging in TV settings, then approve "
-                        + "the Android debugging prompt. Only authorize devices you trust. You can disable this here later.")
+
+    private void voiceSettings() {
+        boolean selected = AssistantSetup.selected(this);
+        new AlertDialog.Builder(this).setTitle("Voice assistant")
+                .setItems(new String[]{AssistantSetup.hasKey(this) ? "Change OpenRouter key" : "Add OpenRouter key",
+                        selected ? "Gemini voice is selected" : "Enable Gemini voice",
+                        "Restore previous assistant"}, (dialog, choice) -> {
+                    if (choice == 0) { keyEntry(); return; }
+                    if (choice == 1) {
+                        if (!AssistantSetup.hasKey(this)) {
+                            keyEntry();
+                        } else if (selected) note("Gemini voice", "Gemini is already selected. Press the remote mic or Ask.");
+                        else new AlertDialog.Builder(this).setTitle("Enable Gemini voice?")
+                                .setMessage("Use your OpenRouter key to send spoken requests and TV context to Gemini. "
+                                        + "Your previous assistant selection will be saved. Android will ask you to select this launcher as the assistant.")
+                                .setNegativeButton("Cancel", (d, w) -> finish())
+                                .setPositiveButton("Continue", (d, w) -> enableVoice())
+                                .setOnCancelListener(d -> finish()).show();
+                    } else restoreVoice();
+                }).setOnCancelListener(dialog -> finish()).show();
+    }
+    private void keyEntry() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setHint("OpenRouter API key");
+        input.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        input.setSaveEnabled(false);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("OpenRouter key")
+                .setMessage("Use your own OpenRouter key with credit. Spoken requests and TV context go through OpenRouter only when you ask. "
+                        + "Saving a key keeps your current assistant; enable Gemini separately.")
+                .setView(input)
+                .setNegativeButton("Cancel", (d, w) -> voiceSettings())
+                .setPositiveButton("Save", null)
+                .setOnCancelListener(d -> voiceSettings()).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String key = input.getText().toString();
+            if (!AssistantSetup.validKey(key)) { input.setError("Enter one API key without spaces"); return; }
+            try {
+                AssistantSetup.saveKey(this, key);
+                input.getText().clear();
+                dialog.dismiss();
+                voiceSettings();
+            } catch (Exception error) { input.setError("Couldn't save the key. Your previous key was kept."); }
+        }));
+        dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show();
+    }
+    private void enableVoice() {
+        if (!AssistantSetup.hasKey(this)) { note("Key needed", "Add your OpenRouter key before enabling Gemini."); return; }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, MICROPHONE); return;
+        }
+        try {
+            AssistantSetup.remember(this);
+            Intent request = AssistantSetup.request(this);
+            if (request == null) {
+                note("Select your assistant", "This TV does not offer an assistant selection prompt. Use assistant.sh <tv-ip> enable from your computer.");
+            } else startActivityForResult(request, ASSISTANT);
+        } catch (Exception error) {
+            note("Couldn't enable Gemini", "Your assistant selection was not changed. You can use assistant.sh <tv-ip> enable from your computer.");
+        }
+    }
+    private void restoreVoice() {
+        if (!AssistantSetup.selected(this)) {
+            note("Current assistant kept", "Gemini is not selected. Your current assistant has been left unchanged."); return;
+        }
+        String previous = AssistantSetup.previousLabel(this);
+        new AlertDialog.Builder(this).setTitle("Restore previous assistant")
+                .setMessage(previous == null
+                        ? "This older installation did not save the previous assistant. Open Android's default-app settings and choose the assistant you want."
+                        : "Previous selection: " + previous + ".\n\nOpen Android's default-app settings, choose Digital assistant, then select it. "
+                                + "You can also run assistant.sh <tv-ip> restore from your computer to restore the saved selection.")
                 .setNegativeButton("Cancel", (d, w) -> finish())
-                .setPositiveButton("Connect", (d, w) -> connect()).setOnCancelListener(d -> finish()).show();
+                .setPositiveButton("Open settings", (d, w) -> {
+                    try { startActivity(AssistantSetup.chooser(this)); finish(); }
+                    catch (Exception unavailable) { note("Assistant settings unavailable", "Run assistant.sh <tv-ip> restore from your computer."); }
+                }).setOnCancelListener(d -> finish()).show();
     }
-    private void connect() {
-        AlertDialog waiting = new AlertDialog.Builder(this).setTitle("Waiting for TV consent")
-                .setMessage("Approve the Android debugging prompt. One-time access is enough; leave Always allow unchecked. "
-                        + "The connection closes after ten minutes without a control request.")
-                .setNegativeButton("Cancel", (d, w) -> { current.set(false); finish(); }).create();
-        waiting.setOnCancelListener(d -> { current.set(false); finish(); });
-        waiting.show();
-        new Thread(() -> {
-            String error = TvRemote.authorize(this, current::get);
-            runOnUiThread(() -> {
-                if (!current.get() || isFinishing()) return;
-                waiting.dismiss();
-                new AlertDialog.Builder(this).setTitle(error == null ? "TV remote ready" : "Couldn't connect")
-                        .setMessage(error == null ? "Arrows and OK are ready for Android use. Press Home to return." : error)
-                        .setPositiveButton("Done", (d, w) -> finish()).setOnCancelListener(d -> finish()).show();
-            });
-        }, "tv-remote-consent").start();
+    private void note(String title, String message) {
+        new AlertDialog.Builder(this).setTitle(title).setMessage(message)
+                .setPositiveButton("Done", (d, w) -> finish()).setOnCancelListener(d -> finish()).show();
     }
-    @Override protected void onDestroy() { current.set(false); super.onDestroy(); }
+    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request == MICROPHONE) {
+            if (results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) enableVoice();
+            else note("Microphone not enabled", "Your current assistant stays selected.");
+        }
+    }
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == ASSISTANT) note(AssistantSetup.selected(this) ? "Gemini enabled" : "Current assistant kept",
+                AssistantSetup.selected(this) ? "Press the remote mic or Ask to try it. Restore your previous assistant from Settings → Voice assistant."
+                        : "Gemini was not selected. Your current assistant has been left unchanged.");
+    }
 }

@@ -1,7 +1,7 @@
 # Contributing
 
 Thanks for helping. The launcher stays deliberately small: plain Java and no Gradle. The stable release has no
-network. This experimental branch adds Gemini voice with a pinned capture runtime and the user's OpenRouter key.
+network. Version 0.1.5 adds optional Gemini voice with a pinned capture runtime and the user's OpenRouter key.
 See [preview scope and build instructions](AGENTS.md#gemini-voice-preview).
 
 ## 1. Report a tested TV

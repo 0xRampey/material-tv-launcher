@@ -6,3 +6,5 @@ build/
 jni/lib/
 voice-deps/
 openrouter_key
+__pycache__/
+*.pyc
