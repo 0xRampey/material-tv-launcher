@@ -11,11 +11,6 @@ No ads, no recommendations. Optional Gemini voice with your own OpenRouter key.
 
 </div>
 
-**Gemini voice.** Press the remote mic from Home or inside an app. A small assistant appears over
-the current screen. Audio and TV context go to Gemini through OpenRouter; no screenshots are sent.
-Add your OpenRouter key in **Settings → Voice assistant**, then enable Gemini. Your current assistant stays
-selected until you do. [Setup details](AGENTS.md#gemini-voice-preview).
-
 ![Material TV Launcher: Spotify in focus with the whole screen tinted Spotify green, an equalizer under its tile, Now Playing with a wavy progress line, and a dock of the six most-used apps](docs/home-playing.png)
 
 ## What you get
