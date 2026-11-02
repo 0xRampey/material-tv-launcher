@@ -50,7 +50,7 @@ Follow the [Quick start](AGENTS.md#quick-start) yourself or [install with your c
 
 ## Supported TVs
 
-The launcher supports **Android TV 9 or newer**. Home, the Apps grid, settings, and default Home selection
+This build enables **experimental Android TV 9+ compatibility**. Home, the Apps grid, settings, and default Home selection
 were tested on a MiTV-MSSP2 running Android 9. Low-memory Android 9 TVs may deny notification access,
 leaving Now Playing unavailable. Gemini voice remains tested only on Android 12+.
 Also tested on Google TV. Amazon Fire TV (Fire OS) is untested.
