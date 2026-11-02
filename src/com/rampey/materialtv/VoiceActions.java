@@ -218,7 +218,7 @@ final class VoiceActions {
             JSONObject action = actions.optJSONObject(i);
             if (action == null) return fail("Couldn't read that TV action");
             String type = action.optString("type");
-            if (!java.util.Set.of("open", "content", "input", "media", "volume", "settings", "home").contains(type))
+            if (!java.util.Arrays.asList("open", "content", "input", "media", "volume", "settings", "home").contains(type))
                 return fail("That action isn't supported. Try an app or media command");
             opensApp |= type.equals("open") || type.equals("content");
             controlsMedia |= type.equals("media");

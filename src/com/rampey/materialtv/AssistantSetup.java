@@ -105,6 +105,7 @@ final class AssistantSetup {
         return intent;
     }
     static Intent request(Context context) {
+        if (android.os.Build.VERSION.SDK_INT < 29) return chooser(context);
         RoleManager roles = context.getSystemService(RoleManager.class);
         if (roles == null || !roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) return null;
         return roles.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT);

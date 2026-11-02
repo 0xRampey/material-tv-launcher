@@ -21,7 +21,7 @@ rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 
 "$BT/aapt2" compile --dir res -o "$OUT/res/compiled.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -o "$OUT/base.apk" \
-  -A assets -0 ttf --java "$OUT/gen" --min-sdk-version 31 --target-sdk-version 34 \
+  -A assets -0 ttf --java "$OUT/gen" --min-sdk-version 28 --target-sdk-version 34 \
   --version-code "${VERSION_CODE:-219}" --version-name "${VERSION_NAME:-0.1.5}" "$OUT/res/compiled.zip"
 
 # JDK core classes (for lambdas) plus android.jar for the Android API; d8 desugars to the TV's level.
@@ -29,7 +29,7 @@ if ! javac -nowarn --release 17 -cp "$JAR" -d "$OUT/classes" $(find src third_pa
   cat "$OUT/javac.log"; echo "javac failed"; exit 1
 fi
 
-"$BT/d8" --min-api 31 --lib "$JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
+"$BT/d8" --min-api 28 --lib "$JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$OUT/base.apk" "$OUT/unsigned.apk"
 (cd "$OUT/dex" && zip -q -j ../unsigned.apk classes.dex)
 (cd jni && zip -q ../"$OUT"/unsigned.apk lib/armeabi-v7a/libonnxruntime.so lib/armeabi-v7a/libsherpa-onnx-jni.so)

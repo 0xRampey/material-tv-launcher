@@ -72,6 +72,16 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(self.state()['files'][KEY_PATH], self.key.read_text())
         self.assertNotIn(BACKUP_PATH, self.state()['files'])
 
+    def test_android9_selects_home_without_changing_assistant(self):
+        state = self.state()
+        state['sdk'] = 28
+        self.state_file.write_text(json.dumps(state))
+        result = self.run_script('install-voice.sh')
+        self.assertEqual(self.state()['home'], PKG + '/.HomeActivity')
+        self.assert_previous()
+        self.assertNotIn(KEY_PATH, self.state()['files'])
+        self.assertIn('Now Playing may be unavailable', result.stderr)
+
     def test_named_command_enables_and_repeated_update_then_restore_works(self):
         self.run_script('install-voice.sh', '--key-file', str(self.key), '--enable-gemini')
         self.assertEqual(self.state()['holders'], [PKG])
