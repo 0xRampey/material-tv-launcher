@@ -291,6 +291,12 @@ exposes its remembered item cannot be reconstructed without a real link. Never c
 
 You need the Android SDK (platform 34, build-tools 34.0.0), JDK 17, and Python 3.9+.
 
+The APK targets Android 9+ (minimum API 28). Use JDK 17 for build-tools 34.0.0;
+its D8 compiler can fail on classes produced by JDK 21 even with `--release 17`.
+Home, Apps, settings, and default Home selection have been checked on Android 9 (MiTV-MSSP2).
+Low-memory Android 9 TVs can reject notification access, making Now Playing unavailable.
+Gemini voice has not been verified on Android 9; its ADB setup still requires Android's assistant-role support.
+
 ```bash
 python3 scripts/prepare-voice.py # pinned capture runtime; checksum checked
 ./build.sh                    # → build/material-tv-launcher.apk, signed with your Android debug key

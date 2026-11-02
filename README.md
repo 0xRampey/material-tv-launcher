@@ -50,9 +50,11 @@ Follow the [Quick start](AGENTS.md#quick-start) yourself or [install with your c
 
 ## Supported TVs
 
-Any TV running Android TV or Google TV on **Android 12 or newer**, from any brand. Tested on Google TV. Untested:
-classic Android TV (the Home button should work the same way) and Amazon Fire TV (Fire OS, which is based on
-Android). Not supported: Samsung (Tizen) and LG (webOS).
+The launcher supports **Android TV 9 or newer**. Home, the Apps grid, settings, and default Home selection
+were tested on a MiTV-MSSP2 running Android 9. Low-memory Android 9 TVs may deny notification access,
+leaving Now Playing unavailable. Gemini voice remains tested only on Android 12+.
+Also tested on Google TV. Amazon Fire TV (Fire OS) is untested.
+Not supported: Samsung (Tizen) and LG (webOS).
 
 This release packages the ARMv7 runtime and needs a TV that supports 32-bit ARM apps.
 

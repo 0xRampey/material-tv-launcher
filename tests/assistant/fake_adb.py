@@ -35,6 +35,10 @@ elif args[0] == 'shell':
     command = shlex.split(args[1]) if len(args) == 2 else args[1:]
     if command == ['am', 'get-current-user']:
         output = '0'
+    elif command == ['getprop', 'ro.build.version.sdk']:
+        output = str(state.get('sdk', 31))
+    elif command[:3] == ['cmd', 'package', 'set-home-activity']:
+        state['home'] = command[3]
     elif command == ['dumpsys', 'role']:
         holders = ','.join(state['holders'])
         output = 'user_id=0 roles=[{name=android.app.role.ASSISTANT\n' + ('holders=' + holders + '\n' if holders else '') + '}]'

@@ -29,6 +29,10 @@ adb -s "$T" install -r "$APK"
 
 # Now Playing card: see which app is playing (reads no notifications).
 S cmd notification allow_listener "$PKG/$PKG.MediaListener"
+LISTENERS="$(S settings get secure enabled_notification_listeners)"
+if [[ "$LISTENERS" != *"$PKG/"* ]]; then
+  echo "Warning: this TV did not grant notification access. Now Playing may be unavailable (Android 9 low-memory TVs restrict this access)." >&2
+fi
 # Dock order: per-app screen time, read on the TV only.
 S cmd appops set "$PKG" GET_USAGE_STATS allow
 
@@ -52,6 +56,12 @@ if [[ "$NEW" != "$CUR" ]]; then
   S settings put secure enabled_accessibility_services "$NEW"
 fi
 S settings put secure accessibility_enabled 1
+
+# Older Android TV supports a normal default Home selection; avoid its launcher chooser.
+SDK="$(S getprop ro.build.version.sdk)"
+if [[ "$SDK" =~ ^[0-9]+$ ]] && (( SDK < 29 )); then
+  S cmd package set-home-activity "$PKG/.HomeActivity"
+fi
 
 S am start -n "$PKG/.HomeActivity" >/dev/null
 for _ in 1 2 3 4 5 6 7 8 9 10; do
